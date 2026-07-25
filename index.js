@@ -9,7 +9,7 @@ const http = require("http");
 
 // ===== تنظیمات =====
 const PORT = process.env.PORT || 3000;
-const PHONE_NUMBER = "93773195958";
+const PHONE_NUMBER = "93745872028";
 
 // ===== Groq AI =====
 const GROQ_API_KEY = process.env.GROQ_API_KEY || "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";
@@ -78,7 +78,7 @@ async function startBot() {
       const messages = [
         {
           role: "system",
-          content: `تو دستیار بشیر در واتساپ هستی که بشیر تو را جایگزین خود در واتساپ کرده تا به پیام های مخاطبین که به بشیر مسج میکند جواب بدی در صورت لازم بگو بشیر در حال حاضر در دسترس نیست `
+          content: `تو به عنوان دستیار بشیر در واتساپ هستی و برای کاربران که در واتساپ مسج میکند تو جواب میدی  `
         },
         ...history,
         { role: "user", content: userMessage }
