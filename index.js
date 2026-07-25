@@ -6,22 +6,72 @@ const {
 
 const P = require("pino");
 const http = require("http");
+const fs = require("fs");
 
 // ===== تنظیمات =====
 const PORT = process.env.PORT || 3000;
 const PHONE_NUMBER = "93745872028";
 
-// ===== Groq AI =====
+// ===== GROQ =====
 const GROQ_API_KEY = process.env.GROQ_API_KEY || "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";
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 
-// تاریخچه مکالمه برای هر کاربر
-const chatHistories = {};
+// ===== سیستم پرامپت جدید =====
+const SYSTEM_PROMPT = `
+تو دستیار شخصی هوش مصنوعی «بشیر» در واتساپ هستی.
 
-// ===== سرور HTTP برای Render =====
+هویت:
+- هرگز ادعا نکن که خودت بشیر هستی.
+- اگر کسی بپرسد «بشیر هست؟» بگو:
+  «سلام 👋
+  بشیر فعلاً در دسترس نیست. من دستیار هوش مصنوعی او هستم. اگر پیامی یا سؤالی داری بفرست؛ اگر بتوانم پاسخ می‌دهم و اگر لازم باشد، وقتی بشیر فرصت داشت خودش پاسخ خواهد داد.»
+
+رفتار:
+- مودب، دوستانه و طبیعی باش.
+- پاسخ‌ها را کوتاه اما کامل بنویس.
+- اگر لازم بود مرحله‌به‌مرحله توضیح بده.
+- به زبان کاربر پاسخ بده.
+- اگر سؤال را نمی‌دانی، صادقانه بگو مطمئن نیستی.
+- اطلاعات ساختگی تولید نکن.
+- اگر پیام فقط سلام بود، مکالمه را دوستانه ادامه بده.
+- اگر کاربر درباره برنامه‌نویسی سؤال کرد، کد کامل و قابل اجرا بنویس.
+- اگر درباره ترید سؤال کرد، پاسخ آموزشی بده و یادآوری کن که تصمیم نهایی با خود کاربر است.
+- اگر کاربر فقط خواست پیامی برای بشیر بگذارد، بگو:
+  «حتماً، اگر بشیر بعداً پیام‌ها را بررسی کند، این پیام را خواهد دید.»
+  هرگز ادعا نکن که پیام را واقعاً ذخیره یا ارسال کرده‌ای مگر اینکه برنامه چنین قابلیتی داشته باشد.
+
+سبک پاسخ:
+- طبیعی صحبت کن.
+- از ایموجی در حد متعادل استفاده کن.
+- پاسخ‌ها شبیه یک انسان باشند، نه یک ربات خشک.
+`;
+
+// ===== تاریخچه مکالمات =====
+const conversations = {};
+
+// ===== ذخیره و بارگذاری تاریخچه =====
+function saveConversations() {
+  try {
+    fs.writeFileSync('conversations.json', JSON.stringify(conversations, null, 2));
+  } catch (e) {}
+}
+
+function loadConversations() {
+  try {
+    const data = fs.readFileSync('conversations.json', 'utf8');
+    return JSON.parse(data);
+  } catch (e) {
+    return {};
+  }
+}
+
+Object.assign(conversations, loadConversations());
+setInterval(saveConversations, 300000);
+
+// ===== سرور HTTP =====
 http.createServer((req, res) => {
   res.writeHead(200);
-  res.end("WhatsApp Bot with Groq AI Running");
+  res.end("🤖 Bashir's AI Assistant");
 }).listen(PORT);
 
 // ===== تابع اصلی ربات =====
@@ -37,22 +87,14 @@ async function startBot() {
   sock.ev.on("creds.update", saveCreds);
 
   sock.ev.on("connection.update", async ({ connection, lastDisconnect }) => {
-    if (connection === "connecting") {
-      console.log("🔄 Connecting...");
-    }
-
     if (connection === "open") {
-      console.log("✅ WhatsApp Connected");
+      console.log("✅ Bashir's AI Assistant is Online");
     }
-
     if (connection === "close") {
-      console.log("❌ Connection closed");
       const shouldReconnect =
-        lastDisconnect?.error?.output?.statusCode !==
-        DisconnectReason.loggedOut;
-
+        lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
       if (shouldReconnect) {
-        console.log("🔄 Reconnecting in 5 seconds...");
+        console.log("🔄 Reconnecting...");
         setTimeout(startBot, 5000);
       }
     }
@@ -72,44 +114,43 @@ async function startBot() {
     }
   }
 
-  // ===== تابع تماس با Groq (متن) =====
-  async function callGroqText(userMessage, history = []) {
+  // ===== تابع پاسخگویی =====
+  async function getAssistantResponse(userMessage, sender) {
+    const userId = sender.split('@')[0];
+    
+    if (!conversations[userId]) {
+      conversations[userId] = {
+        messages: [],
+        firstSeen: new Date().toISOString()
+      };
+    }
+
+    conversations[userId].messages.push({
+      role: "user",
+      content: userMessage,
+      time: new Date().toISOString()
+    });
+
+    const history = conversations[userId].messages.slice(-10);
+    const chatHistory = history.map(m => 
+      `${m.role === 'user' ? '👤 کاربر' : '🤖 دستیار'}: ${m.content}`
+    ).join('\n');
+
+    const fullPrompt = `
+${SYSTEM_PROMPT}
+
+═══════════════════════════════════════
+📝 تاریخچه مکالمه (۱۰ پیام آخر):
+═══════════════════════════════════════
+${chatHistory || 'شروع مکالمه'}
+
+═══════════════════════════════════════
+📩 پیام جدید کاربر:
+═══════════════════════════════════════
+${userMessage}
+`;
+
     try {
-      const messages = [
-  {
-    role: "system",
-    content: `تو دستیار هوش مصنوعی شخصی «بشیر» هستی و در واتساپ به جای او با کاربران گفتگو می‌کنی.
-
-شخصیت:
-- مودب، صمیمی، حرفه‌ای و باحوصله باش.
-- پاسخ‌ها را کوتاه، دقیق و کاربردی بنویس.
-- در صورت نیاز پاسخ کامل‌تر ارائه بده.
-
-در اولین پیام هر گفتگو بگو:
-"سلام 👋
-بشیر فعلاً در دسترس نیست. من دستیار هوش مصنوعی او هستم. اگر سؤال یا پیامی داری بفرست؛ اگر بتوانم پاسخ می‌دهم و اگر لازم باشد، بشیر بعداً آن را بررسی خواهد کرد."
-
-قوانین:
-- هرگز ادعا نکن که خودت بشیر هستی.
-- اگر کسی بپرسد «بشیر کجاست؟» یا «بشیر هست؟» بگو:
-  "بشیر فعلاً در دسترس نیست. اگر پیامی داری بگو تا وقتی آنلاین شد آن را ببیند."
-- اگر سلام کردند، دوستانه سلام کن.
-- به همان زبان کاربر پاسخ بده.
-- اگر سؤال برنامه‌نویسی بود، کد کامل و قابل اجرا ارائه کن.
-- اگر سؤال مربوط به ترید یا سرمایه‌گذاری بود، پاسخ آموزشی بده و تأکید کن که تصمیم نهایی با خود کاربر است.
-- اگر پاسخ را نمی‌دانی، صادقانه بگو که مطمئن نیستی.
-- اطلاعات نادرست یا ساختگی تولید نکن.
-- از ایموجی فقط در صورت مناسب بودن استفاده کن.
-- اگر کاربر فقط بخواهد پیامی برای بشیر بگذارد، پیام را خلاصه کن و از او تشکر کن، اما ادعا نکن که واقعاً پیام را ذخیره یا ارسال کرده‌ای مگر اینکه برنامه واقعاً این قابلیت را داشته باشد.
-- اگر کاربر از تو درباره خودت پرسید، بگو:
-  "من دستیار هوش مصنوعی بشیر هستم و برای کمک به کاربران طراحی شده‌ام`
-  },
-  ...history,
-  {
-    role: "user",
-    content: userMessage
-  }
-];;
       const response = await fetch(GROQ_API_URL, {
         method: "POST",
         headers: {
@@ -118,61 +159,38 @@ async function startBot() {
         },
         body: JSON.stringify({
           model: "llama-3.3-70b-versatile",
-          messages: messages,
-          temperature: 0.7,
-          max_tokens: 1024,
-          top_p: 0.9
-        })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error?.message || "خطای ناشناخته");
-      }
-
-      const data = await response.json();
-      return data.choices[0].message.content;
-    } catch (error) {
-      console.error("❌ Groq Error:", error);
-      return "🤖 متأسفانه خطایی رخ داد. لطفاً دوباره تلاش کنید.";
-    }
-  }
-
-  // ===== تابع تماس با Groq (تصویر) =====
-  async function callGroqImage(base64Image, userMessage = "این تصویر را تحلیل کن") {
-    try {
-      const response = await fetch(GROQ_API_URL, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${GROQ_API_KEY}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          model: "meta-llama/llama-4-scout-17b-16e-instruct",
           messages: [
-            {
-              role: "user",
-              content: [
-                { type: "text", text: userMessage },
-                { type: "image_url", image_url: { url: base64Image } }
-              ]
-            }
+            { role: "system", content: fullPrompt },
+            { role: "user", content: userMessage }
           ],
-          temperature: 0.7,
-          max_tokens: 1024
+          temperature: 0.8,
+          max_tokens: 800
         })
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error?.message || "خطای ناشناخته");
+        throw new Error(errorData.error?.message || "API Error");
       }
 
       const data = await response.json();
-      return data.choices[0].message.content;
+      const reply = data.choices[0].message.content;
+
+      conversations[userId].messages.push({
+        role: "assistant",
+        content: reply,
+        time: new Date().toISOString()
+      });
+
+      if (conversations[userId].messages.length > 20) {
+        conversations[userId].messages = conversations[userId].messages.slice(-20);
+      }
+
+      return reply;
+
     } catch (error) {
-      console.error("❌ Groq Image Error:", error);
-      return "🤖 خطا در تحلیل تصویر. لطفاً دوباره تلاش کنید.";
+      console.error("❌ Error:", error);
+      return "🙏 سلام، من دستیار بشیر هستم. یه مشکل کوچیک پیش اومده، ولی می‌تونیم دوباره تلاش کنیم.";
     }
   }
 
@@ -180,98 +198,33 @@ async function startBot() {
   sock.ev.on("messages.upsert", async ({ messages }) => {
     const msg = messages[0];
 
-    // رد کردن پیام‌های خودم و پیام‌های بدون متن
     if (!msg.message || msg.key.fromMe) return;
 
     const sender = msg.key.remoteJid;
+    const text = msg.message.conversation || msg.message.extendedTextMessage?.text || "";
 
-    // استخراج متن پیام
-    let text =
-      msg.message.conversation ||
-      msg.message.extendedTextMessage?.text ||
-      "";
+    if (!text.trim()) return;
 
-    // استخراج تصویر اگر وجود داشته باشد
-    let imageBase64 = null;
-    let caption = "";
+    console.log(`📩 پیام از ${sender}: ${text}`);
 
-    if (msg.message.imageMessage) {
-      // دانلود تصویر
-      try {
-        const media = await sock.downloadMediaMessage(msg);
-        imageBase64 = `data:${msg.message.imageMessage.mimetype};base64,${media.toString("base64")}`;
-        caption = msg.message.imageMessage.caption || "";
-      } catch (e) {
-        console.error("❌ دانلود تصویر失敗:", e);
-      }
-    }
-
-    // استخراج ویدئو (اختیاری)
-    let videoBase64 = null;
-    if (msg.message.videoMessage) {
-      try {
-        const media = await sock.downloadMediaMessage(msg);
-        videoBase64 = `data:${msg.message.videoMessage.mimetype};base64,${media.toString("base64")}`;
-      } catch (e) {}
-    }
-
-    // ===== پردازش پیام =====
-    console.log(`📩 پیام از ${sender}: ${text || "[رسانه]"}`);
-
-    // ارسال تایپینگ
     await sock.sendPresenceUpdate("composing", sender);
 
-    let reply = "";
+    const reply = await getAssistantResponse(text, sender);
 
-    // اگر تصویر داشتیم
-    if (imageBase64) {
-      const userMessage = caption || "این تصویر را تحلیل کن";
-      reply = await callGroqImage(imageBase64, userMessage);
-    }
-    // اگر ویدئو داشتیم (فعلاً پشتیبانی نمی‌شه)
-    else if (videoBase64) {
-      reply = متاسفم نتوانستم بررسی کنم بشیر خودش بررسی کرده و جواب رو میده منتظر باشیدد";
-    }
-    // پیام متنی
-    else if (text.trim()) {
-      // مدیریت تاریخچه برای هر کاربر
-      if (!chatHistories[sender]) {
-        chatHistories[sender] = [];
-      }
+    const delay = 800 + Math.random() * 1500;
+    await new Promise(resolve => setTimeout(resolve, delay));
 
-      // اگر پیام خیلی طولانی نبود
-      if (text.length < 500) {
-        reply = await callGroqText(text, chatHistories[sender]);
-
-        // ذخیره در تاریخچه (حداکثر ۲۰ پیام)
-        chatHistories[sender].push({ role: "user", content: text });
-        chatHistories[sender].push({ role: "assistant", content: reply });
-
-        if (chatHistories[sender].length > 20) {
-          chatHistories[sender] = chatHistories[sender].slice(-20);
-        }
-      } else {
-        reply = "📏 پیام شما خیلی طولانی است. لطفاً کمتر از ۵۰۰ کاراکتر ارسال کنید.";
-      }
-    } else {
-      reply = "متاسفم نتوانستم بررسی کنم بشیر خودش بررسی کرده و جواب رو میده منتظر باشید";
-    }
-
-    // ارسال پاسخ
-    await sock.sendMessage(sender, {
-      text: reply
-    });
+    await sock.sendMessage(sender, { text: reply });
 
     console.log(`🤖 پاسخ ارسال شد: ${reply.substring(0, 50)}...`);
   });
 }
 
-// ===== اجرای ربات =====
+// ===== اجرا =====
 startBot().catch(err => {
   console.error("❌ Fatal error:", err);
 });
 
-// ===== مدیریت خطاهای ناگهانی =====
 process.on("uncaughtException", (err) => {
   console.log("❌ Uncaught Exception:", err);
 });
