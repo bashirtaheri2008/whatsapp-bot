@@ -9,7 +9,7 @@ const http = require("http");
 
 // ===== تنظیمات =====
 const PORT = process.env.PORT || 3000;
-const PHONE_NUMBER = "93745872028";
+const PHONE_NUMBER = "93773195958";
 
 // ===== Groq AI =====
 const GROQ_API_KEY = process.env.GROQ_API_KEY || "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";
