@@ -994,9 +994,15 @@ async function restoreAllFromGithub(){
       try{
         const gid = item.gid;
         if(!gid || !/^[A-Za-z0-9_\-]{5,}$/.test(gid)) continue;
-        const u = ensureUser(gid, { email: item.email || "" });
-        if(!fs.existsSync(u.metaFile)) await ghGetFile("users/" + gid + "/meta.json", u.metaFile);
-        try{ u.meta = Object.assign(u.meta, JSON.parse(fs.readFileSync(u.metaFile, "utf8"))); }catch(e){}
+        const u = ensureUser(gid, { email: item.email || "" }, true); /* deferSave: پروفایل خالی نوشته نشود */
+        if(!fs.existsSync(u.metaFile)){
+          const okMeta = await ghGetFile("users/" + gid + "/meta.json", u.metaFile);
+          if(!okMeta) console.log("⚠️ پروفایل ابری یافت نشد [" + gid.slice(0, 10) + "] — ذخیره خالی انجام نمی‌شود");
+        }
+        if(fs.existsSync(u.metaFile)){
+          try{ u.meta = Object.assign(u.meta, JSON.parse(fs.readFileSync(u.metaFile, "utf8"))); }catch(e){}
+          u.saveMeta(); /* فقط وقتی پروفایل واقعی موجود است ذخیره می‌شود */
+        }
         if(!fs.existsSync(u.receiptsFile)) await ghGetFile("users/" + gid + "/receipts.json", u.receiptsFile);
         if(!fs.existsSync(u.configFile)) await ghGetFile("users/" + gid + "/config.json", u.configFile);
         if(!fs.existsSync(u.confirmFile)) await ghGetFile("users/" + gid + "/confirm.json", u.confirmFile);
@@ -1171,7 +1177,7 @@ function googleOAuthConfigured(){
 
 const users = new Map();
 
-function ensureUser(gid, profile){
+function ensureUser(gid, profile, deferSave){
   let u = users.get(gid);
   if(u){
     /* به‌روزرسانی پروفایل گوگل */
@@ -1187,8 +1193,13 @@ function ensureUser(gid, profile){
   u = new UserBot(gid, profile || {});
   users.set(gid, u);
   u.meta.lastSeen = Date.now();
-  u.saveMeta();
-  saveUserIndex();
+  if(deferSave){
+    /* v9.8.1: ذخیره به تعویق — تا پروفایل واقعی از بکاپ ابری بازیابی نشده،
+       هیچ فایل خالی روی دیسک نوشته نمی‌شود تا جایگزین نسخه اصلی نشود */
+  }else{
+    u.saveMeta();
+    saveUserIndex();
+  }
   console.log("👤 کاربر جدید: " + (profile?.email || gid));
   return u;
 }
