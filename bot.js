@@ -915,6 +915,11 @@ async function restoreAllFromGithub(){
     if(!fs.existsSync(secretFile)){
       await ghGetFile("server-secret.txt", secretFile);
     }
+    /* تنظیمات مدیریت */
+    try{
+      if(!fs.existsSync(ADMIN_FILE)) await ghGetFile("admin.json", ADMIN_FILE);
+    }catch(e){}
+    loadAdmin();
     /* فهرست کاربران */
     const idxLocal = path.join(USERS_DIR, "index.json");
     let index = null;
@@ -931,6 +936,7 @@ async function restoreAllFromGithub(){
       try{
         const gid = item.gid;
         if(!gid || !/^[A-Za-z0-9_\-]{5,}$/.test(gid)) continue;
+        if(adminState.deleted.includes(gid)){ console.log("⏭️ کاربر حذف‌شده، رد شد: " + gid.slice(0, 10)); continue; }
         const u = ensureUser(gid, { email: item.email || "" });
         if(!fs.existsSync(u.metaFile)) await ghGetFile("users/" + gid + "/meta.json", u.metaFile);
         try{ u.meta = Object.assign(u.meta, JSON.parse(fs.readFileSync(u.metaFile, "utf8"))); }catch(e){}
@@ -951,6 +957,11 @@ async function restoreAllFromGithub(){
           console.log("☁️ نشست [" + gid.slice(0, 10) + "]: " + n + " فایل");
         }
         u.loadLocal();
+        const rOv = adminOverrides(gid);
+        if(rOv.forceConfirm && u.confirmCfg && !u.confirmCfg.enabled){
+          u.confirmCfg.enabled = true;
+          try{ u.saveConfirm(); }catch(e){}
+        }
         /* اگر نشست دارد وصل شو (بدون QR) */
         if(fs.existsSync(path.join(u.authDir, "creds.json"))){
           u.connect().catch(e => console.error("اتصال کاربر:", e.message));
@@ -964,6 +975,42 @@ async function restoreAllFromGithub(){
     console.error("restore:", e.message);
   }
 }
+
+/* ==================================================
+   ADMIN — تنظیمات سراسری مدیریت (admin.json)
+   هر کاربر: blocked / botEnabled / allowGroupsEdit / allowConfirm / forceConfirm / note
+   ================================================== */
+const ADMIN_KEY = process.env.ADMIN_KEY || "hamgap-admin-2026";
+const ADMIN_FILE = path.join(DATA_ROOT, "admin.json");
+const adminState = { users: {}, deleted: [] };
+
+function defaultOverrides(){
+  return { blocked:false, botEnabled:true, allowGroupsEdit:true, allowConfirm:true, forceConfirm:false, note:"" };
+}
+function adminOverrides(gid){ return Object.assign(defaultOverrides(), adminState.users[gid] || {}); }
+
+function loadAdmin(){
+  try{
+    if(fs.existsSync(ADMIN_FILE)){
+      const d = JSON.parse(fs.readFileSync(ADMIN_FILE, "utf8"));
+      adminState.users = d.users || {};
+      adminState.deleted = Array.isArray(d.deleted) ? d.deleted : [];
+    }
+  }catch(e){ console.error("loadAdmin:", e.message); }
+}
+
+function saveAdmin(){
+  try{
+    fs.mkdirSync(DATA_ROOT, { recursive:true });
+    fs.writeFileSync(ADMIN_FILE, JSON.stringify(adminState, null, 2));
+  }catch(e){ console.error("saveAdmin:", e.message); }
+  if(cloudEnabled()){
+    let inCache = false;
+    try{ inCache = pushedShaCache.get("admin.json") === blobSha(ADMIN_FILE); }catch(e){}
+    if(!inCache) ghPutFile("admin.json", ADMIN_FILE).catch(() => {});
+  }
+}
+loadAdmin();
 
 function startCloudTasks(){
   if(!cloudEnabled()) return;
@@ -1123,6 +1170,8 @@ function ensureUser(gid, profile){
   }
   u = new UserBot(gid, profile || {});
   users.set(gid, u);
+  const di = adminState.deleted.indexOf(gid);
+  if(di >= 0){ adminState.deleted.splice(di, 1); saveAdmin(); }
   u.meta.lastSeen = Date.now();
   u.saveMeta();
   saveUserIndex();
@@ -1345,6 +1394,12 @@ class UserBot {
   /* ---------- WHATSAPP ---------- */
   async connect(){
     if(this.connecting || this.sock) return;
+    const ovA = adminOverrides(this.gid);
+    if(ovA.blocked || ovA.botEnabled === false){
+      this.connectionState = "blocked";
+      this.broadcastState();
+      throw new Error("ربات برای این حساب توسط مدیریت غیرفعال شده است");
+    }
     this.connecting = true;
     this.loggedOut = false;
     this.connectionState = "connecting";
@@ -1758,8 +1813,10 @@ app.use(express.static(path.join(__dirname, "public")));
 /* احراز هویت سشن — همه APIها به جز auth نیاز به کوکی دارند */
 app.use("/api", (req, res, next) => {
   if(req.path.startsWith("/auth/") || req.path === "/health") return next();
+  if(req.path.startsWith("/admin/")) return (req.headers["x-admin-key"] === ADMIN_KEY) ? next() : res.status(401).json({ error: "کلید مدیریت نامعتبر است" });
   const gid = sessionGid(req);
   if(!gid) return res.status(401).json({ error: "unauthorized" });
+  if(adminOverrides(gid).blocked) return res.status(403).json({ error: "حساب شما توسط مدیریت مسدود شده است" });
   /* کوکی امضاشده = خودمان صادرش کرده‌ایم؛ اگر کاربر هنوز ثبت نشده، ساخته می‌شود */
   let u = getUser(gid);
   if(!u) u = ensureUser(gid, {});
@@ -1901,6 +1958,7 @@ app.delete("/api/receipts", (req, res) => {
 
 app.post("/api/select-group", (req, res) => {
   const u = req.user;
+  if(!adminOverrides(u.gid).allowGroupsEdit) return res.status(403).json({ ok: false, error: "تنظیمات گروه‌ها توسط مدیریت قفل شده است" });
   const { jid, name } = req.body;
   if(!jid) return res.json({ ok: false, error: "jid لازم است" });
   const idx = u.runtimeConfig.targetGroups.findIndex(t => t.jid === jid);
@@ -1916,12 +1974,14 @@ app.post("/api/select-group", (req, res) => {
 
 app.post("/api/clear-group", (req, res) => {
   const u = req.user;
+  if(!adminOverrides(u.gid).allowGroupsEdit) return res.status(403).json({ ok: false, error: "تنظیمات گروه‌ها توسط مدیریت قفل شده است" });
   u.runtimeConfig.targetGroups = [];
   u.saveConfig(); u.broadcastState();
   res.json({ ok: true });
 
 app.post("/api/select-all-groups", (req, res) => {
   const u = req.user;
+  if(!adminOverrides(u.gid).allowGroupsEdit) return res.status(403).json({ ok: false, error: "تنظیمات گروه‌ها توسط مدیریت قفل شده است" });
   u.runtimeConfig.targetGroups = (u.groupsCache || []).map(g => ({ jid: g.jid, name: g.name || "" }));
   u.saveConfig(); u.broadcastState();
   res.json({ ok: true, count: u.runtimeConfig.targetGroups.length });
@@ -1930,6 +1990,7 @@ app.post("/api/select-all-groups", (req, res) => {
 
 app.post("/api/allowed-numbers", (req, res) => {
   const u = req.user;
+  if(!adminOverrides(u.gid).allowGroupsEdit) return res.status(403).json({ ok: false, error: "تنظیمات گروه‌ها توسط مدیریت قفل شده است" });
   u.runtimeConfig.allowedNumbers = (req.body.numbers || []).filter(n => /^\d+$/.test(n));
   u.saveConfig(); u.broadcastState();
   res.json({ ok: true });
@@ -1944,6 +2005,7 @@ app.post("/api/toggle", (req, res) => {
 
 app.post("/api/refresh-groups", async (req, res) => {
   const u = req.user;
+  if(!adminOverrides(u.gid).allowGroupsEdit) return res.status(403).json({ ok: false, error: "تنظیمات گروه‌ها توسط مدیریت قفل شده است" });
   try{ await u.fetchGroups(); res.json({ ok: true, groups: u.groupsCache }); }
   catch(e){ res.json({ ok: false, error: e.message }); }
 });
@@ -1954,6 +2016,8 @@ app.get("/api/confirm", (req, res) => res.json(req.user.confirmPublic()));
 
 app.post("/api/confirm/toggle", (req, res) => {
   const u = req.user;
+  if(!adminOverrides(u.gid).allowConfirm) return res.status(403).json({ ok: false, error: "جریان تأیید توسط مدیریت غیرفعال شده است" });
+  if(!req.body.enabled && adminOverrides(u.gid).forceConfirm) return res.json({ ok: false, error: "جریان تأیید توسط مدیریت اجباری شده و خاموش کردن آن ممکن نیست" });
   u.confirmCfg.enabled = !!req.body.enabled;
   u.saveConfirm(); u.broadcastState();
   res.json({ ok: true });
@@ -1961,6 +2025,7 @@ app.post("/api/confirm/toggle", (req, res) => {
 
 app.post("/api/confirm/owner", (req, res) => {
   const u = req.user;
+  if(!adminOverrides(u.gid).allowConfirm) return res.status(403).json({ ok: false, error: "جریان تأیید توسط مدیریت غیرفعال شده است" });
   const { jid, name } = req.body;
   if(!jid || !jid.endsWith("@s.whatsapp.net")) return res.json({ ok: false, error: "شماره معتبر نیست" });
   u.confirmCfg.ownerJid = jid;
@@ -1971,6 +2036,7 @@ app.post("/api/confirm/owner", (req, res) => {
 
 app.post("/api/confirm/owner-clear", (req, res) => {
   const u = req.user;
+  if(!adminOverrides(u.gid).allowConfirm) return res.status(403).json({ ok: false, error: "جریان تأیید توسط مدیریت غیرفعال شده است" });
   u.confirmCfg.ownerJid = null;
   u.confirmCfg.ownerName = "";
   u.saveConfirm(); u.broadcastState();
@@ -1979,6 +2045,7 @@ app.post("/api/confirm/owner-clear", (req, res) => {
 
 app.post("/api/confirm/select-group", (req, res) => {
   const u = req.user;
+  if(!adminOverrides(u.gid).allowConfirm) return res.status(403).json({ ok: false, error: "جریان تأیید توسط مدیریت غیرفعال شده است" });
   const { jid, name } = req.body;
   if(!jid) return res.json({ ok: false, error: "jid لازم است" });
   const idx = u.confirmCfg.sourceGroups.findIndex(g => g.jid === jid);
@@ -1990,6 +2057,7 @@ app.post("/api/confirm/select-group", (req, res) => {
 
 app.post("/api/confirm/clear-groups", (req, res) => {
   const u = req.user;
+  if(!adminOverrides(u.gid).allowConfirm) return res.status(403).json({ ok: false, error: "جریان تأیید توسط مدیریت غیرفعال شده است" });
   u.confirmCfg.sourceGroups = [];
   u.saveConfirm(); u.broadcastState();
   res.json({ ok: true });
@@ -1997,6 +2065,7 @@ app.post("/api/confirm/clear-groups", (req, res) => {
 
 app.post("/api/confirm/select-all-groups", (req, res) => {
   const u = req.user;
+  if(!adminOverrides(u.gid).allowConfirm) return res.status(403).json({ ok: false, error: "جریان تأیید توسط مدیریت غیرفعال شده است" });
   u.confirmCfg.sourceGroups = (u.groupsCache || []).map(g => ({ jid: g.jid, name: g.name || "" }));
   u.saveConfirm(); u.broadcastState();
   res.json({ ok: true, count: u.confirmCfg.sourceGroups.length });
@@ -2004,6 +2073,7 @@ app.post("/api/confirm/select-all-groups", (req, res) => {
 
 app.post("/api/confirm/add-contact", (req, res) => {
   const u = req.user;
+  if(!adminOverrides(u.gid).allowConfirm) return res.status(403).json({ ok: false, error: "جریان تأیید توسط مدیریت غیرفعال شده است" });
   let num = String(req.body.number || "").replace(/\D/g, "");
   if(!num) return res.json({ ok: false, error: "شماره لازم است" });
   if(num.startsWith("00")) num = num.slice(2);
@@ -2036,6 +2106,93 @@ app.post("/api/logout", async (req, res) => {
     await u.waLogout();
     res.json({ ok: true });
   }catch(e){ res.json({ ok: false, error: e.message }); }
+});
+
+/* ---------- ADMIN API — پنل مدیریت کل سیستم ---------- */
+app.get("/api/admin/overview", (req, res) => {
+  const list = [];
+  for(const [gid, u] of users.entries()){
+    list.push({
+      gid,
+      email: u.meta.email || "",
+      name: u.meta.name || "",
+      picture: u.meta.picture || "",
+      connected: !!u.sock,
+      connectionState: u.connectionState || "disconnected",
+      botNumber: u.botNumber || "",
+      targetGroups: (u.runtimeConfig && u.runtimeConfig.targetGroups) ? u.runtimeConfig.targetGroups.length : 0,
+      groupCount: u.groupsCache ? u.groupsCache.length : 0,
+      receipts: (u.receipts && u.receipts.list) ? u.receipts.list.length : 0,
+      confirmEnabled: !!(u.confirmCfg && u.confirmCfg.enabled),
+      confirmOwner: (u.confirmCfg && u.confirmCfg.ownerName) || "",
+      lastSeen: u.meta.lastSeen || 0,
+      createdAt: u.meta.createdAt || 0,
+      overrides: adminOverrides(gid)
+    });
+  }
+  res.json({
+    ok: true,
+    users: list,
+    deleted: adminState.deleted || [],
+    stats: {
+      total: users.size,
+      active: activeBotCount(),
+      maxBots: MAX_CONCURRENT_BOTS,
+      ai: keyManager.power(),
+      cloud: cloudEnabled(),
+      adminKeyDefault: !process.env.ADMIN_KEY
+    }
+  });
+});
+
+app.post("/api/admin/user", async (req, res) => {
+  const gid = String(req.body.gid || "");
+  if(!users.has(gid)) return res.status(404).json({ ok: false, error: "کاربر پیدا نشد" });
+  const cur = adminOverrides(gid);
+  const ov = {
+    blocked: req.body.blocked === undefined ? cur.blocked : !!req.body.blocked,
+    botEnabled: req.body.botEnabled === undefined ? cur.botEnabled : !!req.body.botEnabled,
+    allowGroupsEdit: req.body.allowGroupsEdit === undefined ? cur.allowGroupsEdit : !!req.body.allowGroupsEdit,
+    allowConfirm: req.body.allowConfirm === undefined ? cur.allowConfirm : !!req.body.allowConfirm,
+    forceConfirm: req.body.forceConfirm === undefined ? cur.forceConfirm : !!req.body.forceConfirm,
+    note: String(req.body.note === undefined ? cur.note : req.body.note).slice(0, 300)
+  };
+  adminState.users[gid] = ov;
+  const u = users.get(gid);
+  if(u && ov.forceConfirm && u.confirmCfg && !u.confirmCfg.enabled){
+    u.confirmCfg.enabled = true;
+    try{ u.saveConfirm(); }catch(e){}
+    u.broadcastState();
+  }
+  if(u && (ov.blocked || !ov.botEnabled) && u.sock){
+    try{ await u.waLogout(); }catch(e){ console.error("admin disconnect:", e.message); }
+  }
+  saveAdmin();
+  console.log("🛡️ مدیریت: تنظیمات کاربر " + gid.slice(0, 10) + " ذخیره شد");
+  res.json({ ok: true, overrides: ov });
+});
+
+app.post("/api/admin/user-delete", async (req, res) => {
+  const gid = String(req.body.gid || "");
+  const u = users.get(gid);
+  if(u){
+    try{ await u.waLogout(); }catch(e){}
+    users.delete(gid);
+  }
+  try{ fs.rmSync(path.join(USERS_DIR, gid), { recursive: true, force: true }); }catch(e){}
+  delete adminState.users[gid];
+  if(!adminState.deleted.includes(gid)) adminState.deleted.push(gid);
+  saveAdmin();
+  saveUserIndex();
+  console.log("🗑️ مدیریت: کاربر " + gid.slice(0, 10) + " حذف شد (بکاپ ابری او نمی‌شود ولی در ریستور رد می‌شود)");
+  res.json({ ok: true });
+});
+
+app.post("/api/admin/user-restore", (req, res) => {
+  const gid = String(req.body.gid || "");
+  const i = adminState.deleted.indexOf(gid);
+  if(i >= 0){ adminState.deleted.splice(i, 1); saveAdmin(); }
+  res.json({ ok: true });
 });
 
 /* ==================================================
@@ -2107,6 +2264,7 @@ setInterval(() => {
     console.log("🤖 نسخه چندکاربره v9.0.0 — ورود با گوگل");
     console.log("🔑 OAuth گوگل:", googleOAuthConfigured() ? "فعال" : "❌ تنظیم نشده");
     console.log("💾 حداکثر بات هم‌زمان:", MAX_CONCURRENT_BOTS);
+    console.log("🛡️ پنل مدیریت: /admin.html — کلید:", process.env.ADMIN_KEY ? "سفارشی (env)" : "پیش‌فرض hamgap-admin-2026");
     console.log("🎯 تشخیص تکراری سخت‌گیرانه (Strict)");
     console.log("📅 فرمت تاریخ: 2026/09/15 10:14 PM");
     console.log("");
