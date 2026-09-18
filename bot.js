@@ -1,6 +1,7 @@
 /* ==================================================
-   WhatsApp AI Bot — نسخه صرافی (نهایی)
-   Multi-Key • Fuzzy Vision • ریپلای با تاریخ
+   WhatsApp AI Bot — نسخه چندکاربره (Multi-Tenant) v9.0.0
+   هر کاربر با گوگل وارد می‌شود → حساب جدا → شماره واتساپ خودش
+   دیتای هر کاربر (فیش/تنظیمات/نشست) کاملاً ایزوله است
    ================================================== */
 
 const makeWASocket = require("@whiskeysockets/baileys").default;
@@ -19,19 +20,13 @@ const WebSocket = require("ws");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
+const crypto = require("crypto");
 const { execFile } = require("child_process");
 const { promisify } = require("util");
 const execFileAsync = promisify(execFile);
 
 /* ==================================================
-   🔑 API KEYS
-   ================================================== */
-
-/* ==================================================
-   AI GATEWAY — دروازه هوش مصنوعی متمرک
-   همه درخواست‌های AI از طریق سرور مرکزی (همگاب) می‌روند.
-   کلیدهای واقعی روی گیت‌وی مدیریت و می‌چرخند.
-   قدرت = کلیدهای فعال × ۷۰۰ کردیت در دقیقه
+   AI GATEWAY — دروازه هوش مصنوعی متمرکز (مشترک بین همه کاربران)
    ================================================== */
 
 const AI_GATEWAY = {
@@ -90,10 +85,8 @@ const keyManager = {
    ================================================== */
 
 const PORT = process.env.PORT || 3000;
-const AUTH_DIR = path.join(__dirname, "auth_info");
-const CONFIG_FILE = path.join(__dirname, "config.json");
-const RECEIPTS_FILE = path.join(__dirname, "receipts.json");
-const PIN_FILE = path.join(__dirname, "pin.json");
+const DATA_ROOT = path.join(__dirname, "data");
+const USERS_DIR = path.join(DATA_ROOT, "users");
 
 let TEXT_MODEL = null;
 let VISION_MODEL = null;
@@ -112,9 +105,7 @@ const VISION_PRIORITY = [
 
 const MAX_IMAGE_SIZE = 4 * 1024 * 1024;
 const MAX_PDF_SIZE = 10 * 1024 * 1024;
-
-const STRONG_THRESHOLD = 0.90;
-const MEDIUM_THRESHOLD = 0.82;
+const MAX_CONCURRENT_BOTS = 5;
 
 const QUEUE_DELAY_MS = 500;
 const IMAGE_MAX_DIMENSION = 1400;
@@ -145,157 +136,14 @@ const REACTION_NEW = "🆕";
 const REACTION_ERROR = "⚠️";
 
 /* واسطه تایید فیش */
-const CONFIRM_FILE = path.join(__dirname, "confirm.json");
 const CONFIRM_SCAN = "🔍";
 const CONFIRM_WAIT = "⏫";
 
 /* ==================================================
-   STATE
+   UTILS
    ================================================== */
-
-let sock = null;
-let botJid = null;
-let botNumber = null;
-let currentQR = null, currentQRImage = null;
-let connectionState = "disconnected";
-let groupsCache = [];
-
-const runtimeConfig = {
-  targetGroups: [],
-  allowedNumbers: [],
-  enabled: true
-};
-
-let receipts = { list: [] };
-
-/* ==================================================
-   CONFIRM — واسطه تایید فیش
-   گروه‌ها فیش می‌فرستند → فوروارد به صاحب کارت →
-   ری‌اکشن صاحب کارت روی فیش گروه منتقل می‌شود
-   ================================================== */
-
-let confirmCfg = {
-  enabled: false,
-  ownerJid: null,
-  ownerName: "",
-  sourceGroups: [],
-  contacts: {},
-  queue: {}
-};
-
-function loadConfirm(){
-  try{
-    if(fs.existsSync(CONFIRM_FILE)){
-      confirmCfg = Object.assign(confirmCfg, JSON.parse(fs.readFileSync(CONFIRM_FILE, "utf8")));
-    }
-  }catch(e){ console.error("loadConfirm:", e.message); }
-}
-
-function saveConfirm(){
-  try{ fs.writeFileSync(CONFIRM_FILE, JSON.stringify(confirmCfg, null, 2)); }catch(e){}
-}
-
-function trimConfirmQueue(){
-  const keys = Object.keys(confirmCfg.queue);
-  if(keys.length > 200){
-    for(let i = 0; i < keys.length - 200; i++) delete confirmCfg.queue[keys[i]];
-  }
-}
-
-function confirmPublic(){
-  trimConfirmQueue();
-  const contacts = Object.entries(confirmCfg.contacts).map(([jid, name]) => ({ jid, name: name || jid.split("@")[0] }));
-  const seen = new Set(contacts.map(c => c.jid));
-  for(const r of receipts.list){
-    const jid = r.sender + "@s.whatsapp.net";
-    if(!seen.has(jid)){ contacts.push({ jid, name: r.sender, fromReceipts: true }); seen.add(jid); }
-  }
-  const queue = Object.values(confirmCfg.queue);
-  return {
-    enabled: confirmCfg.enabled,
-    ownerJid: confirmCfg.ownerJid,
-    ownerName: confirmCfg.ownerName,
-    sourceGroups: confirmCfg.sourceGroups,
-    pending: queue.filter(q => !q.answered).length,
-    queue: queue.slice(-30).reverse(),
-    contacts
-  };
-}
-
-/* ==================================================
-   QUEUE
-   ================================================== */
-
-const processingQueue = [];
-let isProcessing = false;
-let lastProcessTime = 0;
-
-function enqueueTask(task){
-  processingQueue.push(task);
-  console.log("📋 صف: " + processingQueue.length + " در انتظار");
-  processQueue();
-}
-
-async function processQueue(){
-  if(isProcessing) return;
-  if(!processingQueue.length) return;
-  isProcessing = true;
-  while(processingQueue.length){
-    const task = processingQueue.shift();
-    const now = Date.now();
-    const timeSinceLast = now - lastProcessTime;
-    if(timeSinceLast < QUEUE_DELAY_MS) await sleep(QUEUE_DELAY_MS - timeSinceLast);
-    try{ await task(); }
-    catch(e){ console.error("خطا در صف:", e.message); }
-    lastProcessTime = Date.now();
-  }
-  isProcessing = false;
-}
 
 function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
-
-/* ==================================================
-   RECEIPTS STORE
-   ================================================== */
-
-function loadReceipts(){
-  try{
-    if(fs.existsSync(RECEIPTS_FILE)){
-      const raw = fs.readFileSync(RECEIPTS_FILE, "utf8").trim();
-      if(!raw){ receipts = { list: [] }; saveReceipts(); return; }
-      const data = JSON.parse(raw);
-      receipts = { list: [], ...data };
-      console.log("💾", receipts.list.length, "فیش بارگذاری شد");
-    }
-  }catch(e){
-    console.error("loadReceipts:", e.message);
-    receipts = { list: [] };
-    saveReceipts();
-  }
-}
-
-function saveReceipts(){
-  try{ fs.writeFileSync(RECEIPTS_FILE, JSON.stringify(receipts, null, 2)); }
-  catch(e){ console.error("saveReceipts:", e.message); }
-  scheduleBackup();
-}
-
-function getReceiptsForPanel(){
-  return receipts.list
-    .slice()
-    .sort((a, b) => b.timestamp - a.timestamp)
-    .map(r => ({
-      id: r.id,
-      sender: r.sender,
-      timestamp: r.timestamp,
-      source: r.source || "image",
-      data: r.data
-    }));
-}
-
-/* ==================================================
-   FORMAT DATE — 12 ساعته با AM/PM
-   ================================================== */
 
 function formatDate(timestamp){
   const d = new Date(timestamp);
@@ -313,10 +161,6 @@ function formatDate(timestamp){
 
   return year + "/" + month + "/" + day + " " + hours + ":" + minutes + " " + ampm;
 }
-
-/* ==================================================
-   NORMALIZE
-   ================================================== */
 
 function toEnglishDigits(str){
   const fa = "۰۱۲۳۴۵۶۷۸۹";
@@ -423,10 +267,6 @@ function normalizeField(key, value){
   }
 }
 
-/* ==================================================
-   SIMILARITY
-   ================================================== */
-
 function similarity(a, b){
   if(a === b) return 1;
   if(!a || !b) return 0;
@@ -452,10 +292,6 @@ function levenshtein(a, b){
   }
   return prev[n];
 }
-
-/* ==================================================
-   COMPARE
-   ================================================== */
 
 function compareReceipts(a, b){
   const details = [];
@@ -504,30 +340,7 @@ function compareReceipts(a, b){
 }
 
 /* ==================================================
-   FIND DUPLICATE — 6 لایه
-   ================================================== */
-
-function timeMatches(t1, t2){
-  if(!t1 || !t2) return null;
-  const min1 = t1.split(":").slice(0, 2).join(":");
-  const min2 = t2.split(":").slice(0, 2).join(":");
-  if(min1 !== min2) return false;
-  if(t1.includes(":") && t2.split(":").length > 2 && t1.split(":").length > 2){
-    return t1.split(":")[2] === t2.split(":")[2];
-  }
-  return true;
-}
-
-/* ==================================================
-   FIND DUPLICATE — حالت سخت‌گیرانه (Strict) v2
-   قانون طلایی: هر فیلد عددی (پیگیری، قواره، مرجع، مبلغ،
-   IBAN فرستنده/گیرنده، تاریخ، ساعت) که در هر دو فیش خوانده
-   شده و حتی یک رقم/مقدار فرق داشته باشد → قطعاً تکراری نیست.
-   تکراری فقط با یکی از این دو شرط اعلام می‌شود:
-   ۱) کد یکتای تراکنش (پیگیری / قواره / مرجع) دقیقاً یکسان
-   ۲) IBAN فرستنده + مبلغ + IBAN گیرنده + تاریخ — همه در هر دو
-      فیش خوانده شده و دقیقاً یکسان (ساعت هم اگر هر دو دارند دقیقاً یکسان)
-   هیچ مقایسه نرم، شباهت درصدی یا حدس دیگری وجود ندارد.
+   FIND DUPLICATE — حالت سخت‌گیرانه (Strict) v2 — روی لیست داده‌شده
    ================================================== */
 
 function timeExactMatch(a, b){
@@ -547,12 +360,12 @@ const NUMERIC_FIELDS = [
   { key: "date",          label: "تاریخ",          norm: v => normalizeDate(v) },
 ];
 
-function findDuplicateByVision(newInfo){
-  if(!receipts.list.length) return null;
+function findDuplicateByVision(list, newInfo){
+  if(!list || !list.length) return null;
 
   const nTime = normalizeTime(newInfo.time);
 
-  for(const existing of receipts.list){
+  for(const existing of list){
     let differs = false;
     let guardLabel = "";
     for(const f of NUMERIC_FIELDS){
@@ -618,464 +431,39 @@ function findDuplicateByVision(newInfo){
   return null;
 }
 
-
 /* ==================================================
-   CONFIG
+   MESSAGE HELPERS
    ================================================== */
 
-function saveConfig(){
-  try{ fs.writeFileSync(CONFIG_FILE, JSON.stringify(runtimeConfig, null, 2)); }
-  catch(e){ console.error("saveConfig:", e.message); }
+function getMessageType(msg){
+  const m = msg.message;
+  if(!m) return "unknown";
+  if(m.imageMessage) return "image";
+  if(m.videoMessage) return "video";
+  if(m.audioMessage) return "audio";
+  if(m.documentMessage){
+    const mimetype = m.documentMessage.mimetype || "";
+    if(mimetype.includes("pdf")) return "pdf";
+    return "document";
+  }
+  if(m.conversation || m.extendedTextMessage) return "text";
+  return "unknown";
 }
 
-function loadConfig(){
-  try{
-    if(fs.existsSync(CONFIG_FILE)){
-      Object.assign(runtimeConfig, JSON.parse(fs.readFileSync(CONFIG_FILE, "utf8")));
-    }
-    if(runtimeConfig.targetGroupJid && !(runtimeConfig.targetGroups||[]).length){
-      runtimeConfig.targetGroups = [{ jid: runtimeConfig.targetGroupJid, name: runtimeConfig.targetGroupName || "" }];
-    }
-    delete runtimeConfig.targetGroupJid;
-    delete runtimeConfig.targetGroupName;
-    runtimeConfig.targetGroups = runtimeConfig.targetGroups || [];
-  }catch(e){ console.error("loadConfig:", e.message); }
-}
-
-/* ==================================================
-   PANEL PIN LOCK
-   ================================================== */
-
-const crypto = require("crypto");
-const authTokens = new Set();
-
-function loadPinData(){
-  try{
-    if(fs.existsSync(PIN_FILE)) return JSON.parse(fs.readFileSync(PIN_FILE, "utf8"));
-  }catch(e){ console.error("loadPin:", e.message); }
-  return null;
-}
-function hasPin(){ return !!loadPinData(); }
-function setPin(pin){
-  const salt = crypto.randomBytes(16).toString("hex");
-  const hash = crypto.createHash("sha256").update(salt + String(pin)).digest("hex");
-  try{ fs.writeFileSync(PIN_FILE, JSON.stringify({ salt, hash }, null, 2)); }
-  catch(e){ console.error("savePin:", e.message); }
-}
-function verifyPin(pin){
-  const d = loadPinData();
-  if(!d) return false;
-  const h = crypto.createHash("sha256").update(d.salt + String(pin)).digest("hex");
-  return h === d.hash;
-}
-function issueToken(){
-  const t = crypto.randomBytes(24).toString("hex");
-  authTokens.add(t);
-  return t;
-}
-function tokenValid(t){ return !!t && authTokens.has(t); }
-
-/* ==================================================
-   CLOUD BACKUP (GitHub)
-   نشست واتساپ + فیش‌ها + تنظیمات را در ریپوی خصوصی ذخیره می‌کند
-   متغیرهای محیطی: GITHUB_TOKEN و GITHUB_REPO
-   ================================================== */
-
-const GH_TOKEN = process.env.GITHUB_TOKEN || "";
-const GH_REPO = process.env.GITHUB_REPO || ""; /* مثل "user/wa-bot-data" */
-const GH_BASE = process.env.GH_BASE || "https://api.github.com";
-function cloudEnabled(){ return !!(GH_TOKEN && GH_REPO); }
-
-async function ghApi(method, urlPath, body){
-  return fetch(GH_BASE + urlPath, {
-    method,
-    headers: {
-      "Authorization": "Bearer " + GH_TOKEN,
-      "Accept": "application/vnd.github+json",
-      "User-Agent": "wa-bot",
-      "Content-Type": "application/json"
+function buildQuoted(msgKey){
+  return {
+    key: {
+      remoteJid: msgKey.remoteJid,
+      fromMe: !!msgKey.fromMe,
+      id: msgKey.id,
+      participant: msgKey.participant || undefined
     },
-    body: body ? JSON.stringify(body) : undefined
-  });
-}
-
-/* کش sha فایل‌های پوش‌شده — فقط تغییرات پوش می‌شوند (ضد ریت‌لیمیت گیت‌هاب) */
-const pushedShaCache = new Map();
-
-function blobSha(file){
-  const buf = fs.readFileSync(file);
-  const h = crypto.createHash("sha1");
-  h.update(Buffer.concat([Buffer.from("blob " + buf.length + "\n"), buf]));
-  return h.digest("hex");
-}
-
-async function ghPutFile(remotePath, localFile){
-  let localSha;
-  try{ localSha = blobSha(localFile); }catch(e){ return false; }
-
-  /* قبلاً پوش شده و تغییری نکرده — بدون هیچ درخواستی رد شو */
-  if(pushedShaCache.get(remotePath) === localSha) return true;
-
-  const content = fs.readFileSync(localFile).toString("base64");
-  let sha;
-  try{
-    const g = await ghApi("GET", "/repos/" + GH_REPO + "/contents/" + encodeURI(remotePath));
-    if(g.ok){
-      sha = (await g.json()).sha;
-      if(sha === localSha){
-        pushedShaCache.set(remotePath, localSha);
-        return true; /* ریموت هم همین محتواست */
-      }
-    }
-  }catch(e){}
-  const p = await ghApi("PUT", "/repos/" + GH_REPO + "/contents/" + encodeURI(remotePath), {
-    message: "backup: " + remotePath,
-    content: content,
-    ...(sha ? { sha: sha } : {})
-  });
-  if(p.ok){
-    pushedShaCache.set(remotePath, localSha);
-    return true;
-  }
-  return false;
-}
-
-async function ghGetFile(remotePath, localFile){
-  const g = await ghApi("GET", "/repos/" + GH_REPO + "/contents/" + encodeURI(remotePath));
-  if(!g.ok) return false;
-  const j = await g.json();
-  fs.mkdirSync(path.dirname(localFile), { recursive: true });
-  fs.writeFileSync(localFile, Buffer.from(j.content, "base64"));
-  try{ pushedShaCache.set(remotePath, blobSha(localFile)); }catch(e){}
-  return true;
-}
-
-let backupBusy = false;
-let lastBackupReq = 0;
-async function backupNow(reason){
-  if(!cloudEnabled() || backupBusy) return;
-  backupBusy = true;
-  try{
-    /* اول دیتاهای حیاتی — بعد نشست (نشست شامل صد‌ها فایل lid-mapping است) */
-    const files = [];
-    if(fs.existsSync(RECEIPTS_FILE)) files.push(["receipts.json", RECEIPTS_FILE]);
-    if(fs.existsSync(CONFIG_FILE)) files.push(["config.json", CONFIG_FILE]);
-    if(fs.existsSync(PIN_FILE)) files.push(["pin.json", PIN_FILE]);
-    if(fs.existsSync(CONFIRM_FILE)) files.push(["confirm.json", CONFIRM_FILE]);
-    if(fs.existsSync(AUTH_DIR)){
-      fs.readdirSync(AUTH_DIR).forEach(f => {
-        const p = path.join(AUTH_DIR, f);
-        if(fs.statSync(p).isFile()) files.push(["auth_info/" + f, p]);
-      });
-    }
-    let ok = 0;
-    let changed = 0;
-    for(const pair of files){
-      const localSha = blobSha(pair[1]);
-      const already = pushedShaCache.get(pair[0]) === localSha;
-      if(already) continue; /* بدون تغییر */
-      changed++;
-      if(await ghPutFile(pair[0], pair[1])) ok++;
-    }
-    console.log("☁️ بکاپ " + reason + ": " + (changed ? (ok + "/" + changed + " فایل تغییرکرده") : "بدون تغییر — همه یکسان"));
-  }catch(e){
-    console.error("backup:", e.message);
-  }finally{
-    backupBusy = false;
-  }
-}
-function scheduleBackup(){
-  if(!cloudEnabled()) return;
-  if(Date.now() - lastBackupReq < 90000) return;
-  lastBackupReq = Date.now();
-  setTimeout(() => backupNow("رویداد"), 1500);
-}
-
-async function restoreFromGithub(){
-  if(!cloudEnabled()){
-    console.log("☁️ بکاپ ابری غیرفعال (GITHUB_TOKEN ست نشده)");
-    return;
-  }
-  try{
-    if(!fs.existsSync(RECEIPTS_FILE)) await ghGetFile("receipts.json", RECEIPTS_FILE);
-    if(!fs.existsSync(CONFIG_FILE)) await ghGetFile("config.json", CONFIG_FILE);
-    if(!fs.existsSync(PIN_FILE)) await ghGetFile("pin.json", PIN_FILE);
-    if(!fs.existsSync(CONFIRM_FILE)) await ghGetFile("confirm.json", CONFIRM_FILE);
-  }catch(e){ console.error("restore (json):", e.message); }
-  try{
-    const r = await ghApi("GET", "/repos/" + GH_REPO + "/contents/auth_info");
-    if(r.ok){
-      const list = await r.json();
-      let n = 0;
-      for(const item of list){
-        try{
-          const local = path.join(AUTH_DIR, item.name);
-          if(!fs.existsSync(local) && (await ghGetFile("auth_info/" + item.name, local))) n++;
-        }catch(e){ console.error("restore (" + item.name + "):", e.message); }
-      }
-      console.log("☁️ بازیابی نشست: " + n + " فایل");
-    }
-  }catch(e){ console.error("restore (session):", e.message); }
-  loadConfig();
-  loadReceipts();
-  console.log("☁️ بازیابی از گیت‌هاب کامل شد");
-}
-
-function startCloudTasks(){
-  if(!cloudEnabled()) return;
-  /* بکاپ دوره‌ای هر ۵ دقیقه */
-  setInterval(() => backupNow("خودکار"), 5 * 60 * 1000);
-  /* ضد خواب ریندر: پینگ خودکار هر ۱۰ دقیقه */
-  const extUrl = process.env.RENDER_EXTERNAL_URL;
-  if(extUrl){
-    setInterval(() => { fetch(extUrl + "/api/auth/status").catch(() => {}); }, 10 * 60 * 1000);
-    console.log("⏰ پینگ ضد خواب فعال:", extUrl);
-  }
-}
-
-process.on("SIGTERM", () => {
-  if(!cloudEnabled()) process.exit(0);
-  backupNow("خاموشی").finally(() => process.exit(0));
-  setTimeout(() => process.exit(0), 15000);
-});
-
-/* ==================================================
-   EXPRESS + WS
-   ================================================== */
-
-const app = express();
-app.use(express.json({ limit: "10mb" }));
-app.use(express.static(path.join(__dirname, "public")));
-
-/* قفل پنل — همه APIها به جز auth نیاز به توکن دارند */
-app.use("/api", (req, res, next) => {
-  if(req.path.startsWith("/auth/")) return next();
-  if(tokenValid(req.headers["x-auth-token"])) return next();
-  return res.status(401).json({ error: "unauthorized" });
-});
-
-app.get("/api/auth/status", (req, res) => res.json({ hasPin: hasPin() }));
-
-app.post("/api/auth/setup", (req, res) => {
-  if(hasPin()) return res.status(409).json({ ok: false, error: "pin-exists" });
-  const pin = String((req.body || {}).pin || "");
-  if(!/^\d{4}$/.test(pin)) return res.status(400).json({ ok: false, error: "invalid" });
-  setPin(pin);
-  console.log("🔒 پین پنل تنظیم شد");
-  res.json({ ok: true, token: issueToken() });
-});
-
-app.post("/api/auth/login", (req, res) => {
-  const pin = String((req.body || {}).pin || "");
-  if(!hasPin()) return res.status(400).json({ ok: false, error: "no-pin" });
-  if(verifyPin(pin)){
-    console.log("🔓 پنل با پین باز شد");
-    return res.json({ ok: true, token: issueToken() });
-  }
-  console.log("❌ پین اشتباه وارد شد");
-  res.status(401).json({ ok: false, error: "wrong" });
-});
-
-app.get("/api/auth/check", (req, res) => {
-  if(tokenValid(req.headers["x-auth-token"])) return res.json({ ok: true });
-  res.status(401).json({ ok: false });
-});
-
-app.post("/api/auth/change", (req, res) => {
-  if(!tokenValid(req.headers["x-auth-token"])) return res.status(401).json({ ok: false, error: "unauthorized" });
-  const { currentPin, newPin } = req.body || {};
-  if(!verifyPin(currentPin)) return res.status(401).json({ ok: false, error: "wrong" });
-  if(!/^\d{4}$/.test(String(newPin || ""))) return res.status(400).json({ ok: false, error: "invalid" });
-  setPin(String(newPin));
-  console.log("🔑 پین پنل تغییر کرد");
-  res.json({ ok: true });
-});
-
-app.post("/api/auth/remove", (req, res) => {
-  if(!tokenValid(req.headers["x-auth-token"])) return res.status(401).json({ ok: false, error: "unauthorized" });
-  const { currentPin } = req.body || {};
-  if(!verifyPin(currentPin)) return res.status(401).json({ ok: false, error: "wrong" });
-  try{ fs.unlinkSync(PIN_FILE); }catch(e){}
-  console.log("🔓 قفل پنل حذف شد");
-  res.json({ ok: true });
-});
-
-const server = http.createServer(app);
-const wss = new WebSocket.Server({ server });
-
-function broadcast(data){
-  const msg = JSON.stringify(data);
-  wss.clients.forEach(c => {
-    if(c.readyState === WebSocket.OPEN) c.send(msg);
-  });
-}
-
-function broadcastState(){
-  broadcast({
-    type: "state",
-    state: connectionState, qr: currentQR, qrImage: currentQRImage, botNumber,
-    groups: groupsCache, config: runtimeConfig,
-    confirm: confirmPublic(),
-    models: { text: TEXT_MODEL, vision: VISION_MODEL },
-    keys: keyManager.power()
-  });
+    message: { conversation: "." }
+  };
 }
 
 /* ==================================================
-   API ROUTES
-   ================================================== */
-
-app.get("/api/status", (req, res) => {
-  res.json({
-    state: connectionState, qr: currentQR, qrImage: currentQRImage, botNumber,
-    groups: groupsCache, config: runtimeConfig,
-    models: { text: TEXT_MODEL, vision: VISION_MODEL },
-    keys: keyManager.power(),
-    queue: { pending: processingQueue.length, busy: isProcessing }
-  });
-});
-
-app.get("/api/keys", async (req, res) => {
-  await keyManager.refreshStatus();
-  res.json({ keys: keyManager.power() });
-});
-app.get("/api/receipts", (req, res) => res.json({ receipts: getReceiptsForPanel() }));
-
-app.delete("/api/receipts/:id", (req, res) => {
-  const idx = receipts.list.findIndex(r => r.id === req.params.id);
-  if(idx < 0) return res.json({ ok: false, error: "not found" });
-  receipts.list.splice(idx, 1);
-  saveReceipts();
-  broadcast({ type: "receipts", receipts: getReceiptsForPanel() });
-  res.json({ ok: true });
-});
-
-app.delete("/api/receipts", (req, res) => {
-  receipts = { list: [] };
-  saveReceipts();
-  broadcast({ type: "receipts", receipts: [] });
-  res.json({ ok: true });
-});
-
-app.post("/api/select-group", (req, res) => {
-  const { jid, name } = req.body;
-  if(!jid) return res.json({ ok: false, error: "jid لازم است" });
-  const idx = runtimeConfig.targetGroups.findIndex(t => t.jid === jid);
-  if(idx >= 0){
-    runtimeConfig.targetGroups.splice(idx, 1);
-    saveConfig(); broadcastState();
-    return res.json({ ok: true, selected: false, count: runtimeConfig.targetGroups.length });
-  }
-  runtimeConfig.targetGroups.push({ jid, name: name || "" });
-  saveConfig(); broadcastState();
-  res.json({ ok: true, selected: true, count: runtimeConfig.targetGroups.length });
-});
-
-app.post("/api/clear-group", (req, res) => {
-  runtimeConfig.targetGroups = [];
-  saveConfig(); broadcastState();
-  res.json({ ok: true });
-});
-
-/* ---------- واسطه تایید فیش ---------- */
-app.get("/api/confirm", (req, res) => res.json(confirmPublic()));
-
-app.post("/api/confirm/toggle", (req, res) => {
-  confirmCfg.enabled = !!req.body.enabled;
-  saveConfirm(); broadcastState();
-  res.json({ ok: true });
-});
-
-app.post("/api/confirm/owner", (req, res) => {
-  const { jid, name } = req.body;
-  if(!jid || !jid.endsWith("@s.whatsapp.net")) return res.json({ ok: false, error: "شماره معتبر نیست" });
-  confirmCfg.ownerJid = jid;
-  confirmCfg.ownerName = name || "";
-  saveConfirm(); broadcastState();
-  res.json({ ok: true });
-});
-
-app.post("/api/confirm/owner-clear", (req, res) => {
-  confirmCfg.ownerJid = null;
-  confirmCfg.ownerName = "";
-  saveConfirm(); broadcastState();
-  res.json({ ok: true });
-});
-
-app.post("/api/confirm/select-group", (req, res) => {
-  const { jid, name } = req.body;
-  if(!jid) return res.json({ ok: false, error: "jid لازم است" });
-  const idx = confirmCfg.sourceGroups.findIndex(g => g.jid === jid);
-  if(idx >= 0) confirmCfg.sourceGroups.splice(idx, 1);
-  else confirmCfg.sourceGroups.push({ jid, name: name || "" });
-  saveConfirm(); broadcastState();
-  res.json({ ok: true, selected: idx < 0, count: confirmCfg.sourceGroups.length });
-});
-
-app.post("/api/confirm/clear-groups", (req, res) => {
-  confirmCfg.sourceGroups = [];
-  saveConfirm(); broadcastState();
-  res.json({ ok: true });
-});
-
-app.post("/api/confirm/add-contact", (req, res) => {
-  let num = String(req.body.number || "").replace(/\D/g, "");
-  if(!num) return res.json({ ok: false, error: "شماره لازم است" });
-  if(num.startsWith("00")) num = num.slice(2);
-  if(num.startsWith("0")) num = num.slice(1);
-  if(num.length <= 10) num = "90" + num; /* پیش‌فرض ترکیه اگر کد کشور داده نشد */
-  const jid = num + "@s.whatsapp.net";
-  confirmCfg.contacts[jid] = req.body.name || "";
-  saveConfirm(); broadcastState();
-  res.json({ ok: true, jid });
-});
-
-app.post("/api/allowed-numbers", (req, res) => {
-  runtimeConfig.allowedNumbers = (req.body.numbers || []).filter(n => /^\d+$/.test(n));
-  saveConfig(); broadcastState();
-  res.json({ ok: true });
-});
-
-app.post("/api/toggle", (req, res) => {
-  runtimeConfig.enabled = !!req.body.enabled;
-  saveConfig(); broadcastState();
-  res.json({ ok: true });
-});
-
-app.post("/api/refresh-groups", async (req, res) => {
-  try{ await fetchGroups(); res.json({ ok: true, groups: groupsCache }); }
-  catch(e){ res.json({ ok: false, error: e.message }); }
-});
-
-app.post("/api/logout", async (req, res) => {
-  try{
-    if(sock){ try{ await sock.logout(); }catch{} sock = null; }
-    if(fs.existsSync(AUTH_DIR)) fs.rmSync(AUTH_DIR, { recursive: true, force: true });
-    connectionState = "disconnected";
-    currentQR = null; currentQRImage = null; botJid = null; botNumber = null; groupsCache = [];
-    broadcastState();
-    res.json({ ok: true });
-    setTimeout(connectToWhatsApp, 1500);
-  }catch(e){ res.json({ ok: false, error: e.message }); }
-});
-
-/* ==================================================
-   GROUPS
-   ================================================== */
-
-async function fetchGroups(){
-  if(!sock || connectionState !== "connected") return [];
-  const chats = await sock.groupFetchAllParticipating();
-  const list = Object.keys(chats).map(jid => ({
-    jid, name: chats[jid].subject,
-    participants: chats[jid].participants?.length || 0
-  }));
-  list.sort((a, b) => a.name.localeCompare(b.name));
-  groupsCache = list;
-}
-
-/* ==================================================
-   DETECT MODELS
+   MODELS — یک بار برای همه کاربران
    ================================================== */
 
 async function detectModels(){
@@ -1116,36 +504,14 @@ async function detectModels(){
   }
 }
 
-/* ==================================================
-   MESSAGE HELPERS
-   ================================================== */
-
-function getMessageType(msg){
-  const m = msg.message;
-  if(!m) return "unknown";
-  if(m.imageMessage) return "image";
-  if(m.videoMessage) return "video";
-  if(m.audioMessage) return "audio";
-  if(m.documentMessage){
-    const mimetype = m.documentMessage.mimetype || "";
-    if(mimetype.includes("pdf")) return "pdf";
-    return "document";
-  }
-  if(m.conversation || m.extendedTextMessage) return "text";
-  return "unknown";
-}
-
-async function sendReaction(msg, emoji){
-  try{
-    await sock.sendMessage(msg.key.remoteJid, {
-      react: { text: emoji, key: msg.key }
-    });
-    return true;
-  }catch(e){ return false; }
+let modelsPromise = null;
+function ensureModels(){
+  if(!modelsPromise) modelsPromise = detectModels().catch(e => { modelsPromise = null; throw e; });
+  return modelsPromise;
 }
 
 /* ==================================================
-   IMAGE PROCESSING
+   IMAGE / PDF PROCESSING
    ================================================== */
 
 let sharp = null;
@@ -1156,7 +522,7 @@ try{
   console.warn("⚠️ sharp نصب نیست — فشرده‌سازی کار نمی‌کنه");
 }
 
-async function downloadImage(msg){
+async function downloadImage(sock, msg){
   try{
     const buffer = await downloadMediaMessage(
       msg, "buffer", {},
@@ -1196,10 +562,6 @@ async function downloadImage(msg){
   }
 }
 
-/* ==================================================
-   PDF PROCESSING
-   ================================================== */
-
 async function pdfToJpeg(pdfBuffer, dpi = 150){
   const tmpDir = os.tmpdir();
   const timestamp = Date.now() + "_" + Math.random().toString(36).slice(2, 7);
@@ -1235,7 +597,7 @@ async function pdfToJpeg(pdfBuffer, dpi = 150){
   }
 }
 
-async function downloadPdf(msg){
+async function downloadPdf(sock, msg){
   try{
     const buffer = await downloadMediaMessage(
       msg, "buffer", {},
@@ -1269,7 +631,7 @@ async function downloadPdf(msg){
 }
 
 /* ==================================================
-   EXTRACT RECEIPT INFO
+   EXTRACT RECEIPT INFO (Vision) — مشترک
    ================================================== */
 
 async function extractReceiptInfo(imageData){
@@ -1290,15 +652,15 @@ async function extractReceiptInfo(imageData){
 فقط و فقط JSON برگردان (بدون هیچ متن اضافی، بدون markdown):
 
 {
-  "isReceipt": true اگر فیش بانکی است، false اگر نیست,
+  "isReceipt": true اگر فیش بانکی است, false اگر نیست,
   "bank": "نام بانک",
   "bankBranch": "نام یا کد شعبه اگر روی فیش هست",
   "amount": "مبلغ به عدد انگلیسی بدون کاما (مثال: 5000)",
   "currency": "TL یا USD یا EUR",
   "date": "تاریخ به فرمت DD/MM/YYYY",
-  "time": "ساعت دقیق — HH:MM:SS اگر ثانیه روی فیش هست، وگرنه HH:MM",
+  "time": "ساعت دقیق — HH:MM:SS اگر ثانیه روی فیش هست, وگرنه HH:MM",
   "trackingNo": "شماره پیگیری اصلی (مهم‌ترین فیلد)",
-  "receiptNo": "شماره قواره فیش / شماره سند (اگر جدا از شماره پیگیری هست، وگرنه خالی)",
+  "receiptNo": "شماره قواره فیش / شماره سند (اگر جدا از شماره پیگیری هست, وگرنه خالی)",
   "referenceCode": "هر کد مرجع یا شماره سند دیگری که در فیش هست",
   "senderName": "نام کامل فرستنده (بدون القاب مثل Mr/Mrs/Bey/Hanım)",
   "senderIban": "IBAN فرستنده (فقط حروف و اعداد بدون فاصله)",
@@ -1383,415 +745,1289 @@ async function extractReceiptInfo(imageData){
 }
 
 /* ==================================================
-   MAIN HANDLER
+   CLOUD BACKUP (GitHub) — چندکاربره
+   ساختار ریپوی دیتا:
+     users/index.json — فهرست کاربران
+     users/<gid>/meta.json — پروفایل گوگل
+     users/<gid>/receipts.json
+     users/<gid>/config.json
+     users/<gid>/confirm.json
+     users/<gid>/auth_info/<file> — نشست واتساپ
+     server-secret.txt — رمز امضای سشن (برای ماندگاری کوکی‌ها)
    ================================================== */
 
-async function handleReceipt(imageData, senderNumber, source = "image", msgKey = null){
-  let info;
+const GH_TOKEN = process.env.GITHUB_TOKEN || "";
+const GH_REPO = process.env.GITHUB_REPO || "";
+const GH_BASE = process.env.GH_BASE || "https://api.github.com";
+
+function cloudEnabled(){
+  return !!(GH_TOKEN && GH_REPO);
+}
+
+async function ghApi(method, urlPath, body){
   try{
-    info = await extractReceiptInfo(imageData.base64);
+    const headers = {
+      "Authorization": "token " + GH_TOKEN,
+      "Accept": "application/vnd.github+json",
+      "User-Agent": "wa-bot-multiuser"
+    };
+    const opts = { method, headers };
+    if(body) opts.body = JSON.stringify(body);
+    return await fetch(GH_BASE + urlPath, opts);
   }catch(e){
-    console.error("extractReceiptInfo نهایی:", e.message);
-    return { status: "error", message: source === "pdf" ? MSG_PDF_ERROR : MSG_ERROR };
+    return { ok: false, status: 0, json: async () => ({}) };
   }
-
-  if(info.isReceipt === false) return { status: "not_receipt", message: MSG_NOT_RECEIPT };
-
-  const dup = findDuplicateByVision(info);
-
-  if(dup){
-    console.log("🔁 تکراری — لایه: " + dup.layer + " — " + (dup.score * 100).toFixed(1) + "%");
-    return { status: "duplicate", score: dup.score, matched: dup.record, layer: dup.layer };
-  }
-
-  const id = "rc_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7);
-  const record = { id, data: info, sender: senderNumber, timestamp: Date.now(), source, msgKey: msgKey || null };
-  receipts.list.push(record);
-  saveReceipts();
-  broadcast({ type: "receipts", receipts: getReceiptsForPanel() });
-  console.log("✅ فیش جدید ذخیره شد:", id);
-  return { status: "saved", id };
 }
 
-/* ==================================================
-   QUOTED
-   ================================================== */
+/* کش sha فایل‌های پوش‌شده — فقط تغییرات پوش می‌شوند (ضد ریت‌لیمیت گیت‌هاب) */
+const pushedShaCache = new Map();
 
-function buildQuoted(msgKey){
-  return {
-    key: {
-      remoteJid: msgKey.remoteJid,
-      fromMe: !!msgKey.fromMe,
-      id: msgKey.id,
-      participant: msgKey.participant || undefined
-    },
-    message: { conversation: "." }
-  };
+function blobSha(file){
+  const buf = fs.readFileSync(file);
+  const h = crypto.createHash("sha1");
+  h.update(Buffer.concat([Buffer.from("blob " + buf.length + "\n"), buf]));
+  return h.digest("hex");
 }
 
-/* ==================================================
-   PROCESS TASK
-   ================================================== */
+async function ghPutFile(remotePath, localFile){
+  let localSha;
+  try{ localSha = blobSha(localFile); }catch(e){ return false; }
 
-async function processReceiptTask(msg, msgType, senderNumber){
+  if(pushedShaCache.get(remotePath) === localSha) return true;
+
+  const content = fs.readFileSync(localFile).toString("base64");
+  let sha;
   try{
-    await sendReaction(msg, REACTION_PROCESSING);
-
-    let imageData = null;
-    let source = "image";
-
-    if(msgType === "image"){
-      imageData = await downloadImage(msg);
-    }else if(msgType === "pdf"){
-      source = "pdf";
-      imageData = await downloadPdf(msg);
+    const g = await ghApi("GET", "/repos/" + GH_REPO + "/contents/" + encodeURI(remotePath));
+    if(g.ok){
+      sha = (await g.json()).sha;
+      if(sha === localSha){
+        pushedShaCache.set(remotePath, localSha);
+        return true;
+      }
     }
+  }catch(e){}
+  const p = await ghApi("PUT", "/repos/" + GH_REPO + "/contents/" + encodeURI(remotePath), {
+    message: "backup: " + remotePath,
+    content: content,
+    ...(sha ? { sha: sha } : {})
+  });
+  if(p.ok){
+    pushedShaCache.set(remotePath, localSha);
+    return true;
+  }
+  return false;
+}
 
-    if(!imageData){
-      await sendReaction(msg, REACTION_ERROR);
-      await sock.sendMessage(msg.key.remoteJid, {
-        text: msgType === "pdf" ? MSG_PDF_ERROR : MSG_ERROR
-      }, { quoted: msg });
-      return;
+async function ghGetFile(remotePath, localFile){
+  const g = await ghApi("GET", "/repos/" + GH_REPO + "/contents/" + encodeURI(remotePath));
+  if(!g.ok) return false;
+  const j = await g.json();
+  fs.mkdirSync(path.dirname(localFile), { recursive: true });
+  fs.writeFileSync(localFile, Buffer.from(j.content, "base64"));
+  try{ pushedShaCache.set(remotePath, blobSha(localFile)); }catch(e){}
+  return true;
+}
+
+let backupBusy = false;
+const lastBackupReqByUser = new Map();
+
+async function backupUser(gid, reason){
+  if(!cloudEnabled() || backupBusy) return;
+  const u = users.get(gid);
+  if(!u) return;
+  backupBusy = true;
+  try{
+    const remote = f => "users/" + gid + "/" + f;
+    const files = [];
+    if(fs.existsSync(u.metaFile)) files.push([remote("meta.json"), u.metaFile]);
+    if(fs.existsSync(u.receiptsFile)) files.push([remote("receipts.json"), u.receiptsFile]);
+    if(fs.existsSync(u.configFile)) files.push([remote("config.json"), u.configFile]);
+    if(fs.existsSync(u.confirmFile)) files.push([remote("confirm.json"), u.confirmFile]);
+    if(fs.existsSync(u.authDir)){
+      fs.readdirSync(u.authDir).forEach(f => {
+        const p = path.join(u.authDir, f);
+        if(fs.statSync(p).isFile()) files.push([remote("auth_info/" + f), p]);
+      });
     }
+    let ok = 0;
+    let changed = 0;
+    for(const pair of files){
+      let localSha;
+      try{ localSha = blobSha(pair[1]); }catch(e){ continue; }
+      if(pushedShaCache.get(pair[0]) === localSha) continue;
+      changed++;
+      if(await ghPutFile(pair[0], pair[1])) ok++;
+    }
+    console.log("☁️ بکاپ [" + gid.slice(0, 10) + "] " + reason + ": " + (changed ? (ok + "/" + changed + " فایل تغییرکرده") : "بدون تغییر"));
+  }catch(e){
+    console.error("backup:", e.message);
+  }finally{
+    backupBusy = false;
+  }
+}
 
-    const result = await handleReceipt(imageData, senderNumber, source, msg.key);
+function scheduleBackup(gid){
+  if(!cloudEnabled()) return;
+  const last = lastBackupReqByUser.get(gid) || 0;
+  if(Date.now() - last < 90000) return;
+  lastBackupReqByUser.set(gid, Date.now());
+  setTimeout(() => backupUser(gid, "رویداد"), 1500);
+}
 
-    if(result.status === "duplicate"){
-      await sendReaction(msg, REACTION_DUPLICATE);
+function saveUserIndex(){
+  try{
+    const idx = [];
+    for(const [gid, u] of users.entries()){
+      idx.push({ gid, email: u.meta.email || "" });
+    }
+    fs.mkdirSync(USERS_DIR, { recursive: true });
+    const local = path.join(USERS_DIR, "index.json");
+    fs.writeFileSync(local, JSON.stringify({ users: idx }, null, 2));
+    if(cloudEnabled()){
+      let inCache = false;
+      try{ inCache = pushedShaCache.get("users/index.json") === blobSha(local); }catch(e){}
+      if(!inCache) ghPutFile("users/index.json", local).catch(() => {});
+    }
+  }catch(e){ console.error("saveUserIndex:", e.message); }
+}
 
-      // ---- ریپلای ۱: به پیام فعلی ----
-      await sock.sendMessage(msg.key.remoteJid, {
-        text: MSG_DUPLICATE
-      }, { quoted: msg });
+async function restoreAllFromGithub(){
+  if(!cloudEnabled()){
+    console.log("☁️ بکاپ ابری غیرفعال (GITHUB_TOKEN ست نشده)");
+    return;
+  }
+  try{
+    /* رمز امضای سشن */
+    const secretFile = path.join(DATA_ROOT, "server-secret.txt");
+    if(!fs.existsSync(secretFile)){
+      await ghGetFile("server-secret.txt", secretFile);
+    }
+    /* فهرست کاربران */
+    const idxLocal = path.join(USERS_DIR, "index.json");
+    let index = null;
+    try{
+      if(fs.existsSync(idxLocal)) index = JSON.parse(fs.readFileSync(idxLocal, "utf8"));
+    }catch(e){}
+    if(!index){
+      await ghGetFile("users/index.json", idxLocal);
+      try{ index = JSON.parse(fs.readFileSync(idxLocal, "utf8")); }catch(e){ index = null; }
+    }
+    const list = (index && Array.isArray(index.users)) ? index.users : [];
+    console.log("☁️ بازیابی: " + list.length + " کاربر از گیت‌هاب");
+    for(const item of list){
+      try{
+        const gid = item.gid;
+        if(!gid || !/^[A-Za-z0-9_\-]{5,}$/.test(gid)) continue;
+        const u = ensureUser(gid, { email: item.email || "" });
+        if(!fs.existsSync(u.metaFile)) await ghGetFile("users/" + gid + "/meta.json", u.metaFile);
+        try{ u.meta = Object.assign(u.meta, JSON.parse(fs.readFileSync(u.metaFile, "utf8"))); }catch(e){}
+        if(!fs.existsSync(u.receiptsFile)) await ghGetFile("users/" + gid + "/receipts.json", u.receiptsFile);
+        if(!fs.existsSync(u.configFile)) await ghGetFile("users/" + gid + "/config.json", u.configFile);
+        if(!fs.existsSync(u.confirmFile)) await ghGetFile("users/" + gid + "/confirm.json", u.confirmFile);
+        /* نشست */
+        const r = await ghApi("GET", "/repos/" + GH_REPO + "/contents/users/" + gid + "/auth_info");
+        if(r.ok){
+          const authFiles = await r.json();
+          let n = 0;
+          for(const f of authFiles){
+            try{
+              const local = path.join(u.authDir, f.name);
+              if(!fs.existsSync(local) && (await ghGetFile("users/" + gid + "/auth_info/" + f.name, local))) n++;
+            }catch(e){}
+          }
+          console.log("☁️ نشست [" + gid.slice(0, 10) + "]: " + n + " فایل");
+        }
+        u.loadLocal();
+        /* اگر نشست دارد وصل شو (بدون QR) */
+        if(fs.existsSync(path.join(u.authDir, "creds.json"))){
+          u.connect().catch(e => console.error("اتصال کاربر:", e.message));
+        }
+      }catch(e){
+        console.error("restore user:", e.message);
+      }
+    }
+    console.log("☁️ بازیابی از گیت‌هاب کامل شد");
+  }catch(e){
+    console.error("restore:", e.message);
+  }
+}
 
-      // ---- ریپلای ۲: فقط تاریخ به پیام اصلی ----
-      const matched = result.matched;
-      if(matched && matched.msgKey && matched.msgKey.id && matched.msgKey.remoteJid){
-        try{
-          const rd = matched.data || {};
-          const oldDate = formatDate(matched.timestamp)
-            + (rd.date ? "\n🧾 مورخ فیش: " + rd.date : "")
-            + (rd.time ? " — " + rd.time : "");
+function startCloudTasks(){
+  if(!cloudEnabled()) return;
+  setInterval(() => {
+    for(const gid of users.keys()) backupUser(gid, "خودکار");
+  }, 5 * 60 * 1000);
+  const extUrl = process.env.RENDER_EXTERNAL_URL;
+  if(extUrl){
+    setInterval(() => { fetch(extUrl + "/api/health").catch(() => {}); }, 10 * 60 * 1000);
+    console.log("⏰ پینگ ضد خواب فعال:", extUrl);
+  }
+}
 
-          await sock.sendMessage(msg.key.remoteJid, {
-            text: oldDate
-          }, { quoted: buildQuoted(matched.msgKey) });
+process.on("SIGTERM", () => {
+  if(!cloudEnabled()) process.exit(0);
+  (async () => {
+    for(const gid of users.keys()) await backupUser(gid, "خاموشی");
+    process.exit(0);
+  })();
+  setTimeout(() => process.exit(0), 20000);
+});
 
-          console.log("📤 ریپلای ۲ با تاریخ:", oldDate);
-        }catch(e){
-          console.error("خطا ریپلای ۲:", e.message);
+/* ==================================================
+   AUTH — ورود با گوگل (OAuth 2.0) + سشن کوکی امضاشده
+   ================================================== */
+
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || "";
+const SESSION_COOKIE = "wasid";
+const SESSION_MAX_AGE = 30 * 24 * 3600 * 1000; /* ۳۰ روز */
+
+let SESSION_SECRET = "";
+function initSessionSecret(){
+  const secretFile = path.join(DATA_ROOT, "server-secret.txt");
+  try{
+    if(fs.existsSync(secretFile)){
+      SESSION_SECRET = fs.readFileSync(secretFile, "utf8").trim();
+      if(SESSION_SECRET.length >= 32) return;
+    }
+    SESSION_SECRET = crypto.randomBytes(32).toString("hex");
+    fs.mkdirSync(DATA_ROOT, { recursive: true });
+    fs.writeFileSync(secretFile, SESSION_SECRET);
+    if(cloudEnabled()){
+      ghPutFile("server-secret.txt", secretFile).catch(() => {});
+    }
+  }catch(e){
+    SESSION_SECRET = crypto.randomBytes(32).toString("hex");
+  }
+}
+
+function signValue(v){
+  const sig = crypto.createHmac("sha256", SESSION_SECRET).update(v).digest("base64url");
+  return v + "." + sig;
+}
+
+function unsignValue(s){
+  if(!s || typeof s !== "string") return null;
+  const i = s.lastIndexOf(".");
+  if(i < 0) return null;
+  const v = s.slice(0, i);
+  if(signValue(v) !== s) return null;
+  return v;
+}
+
+function parseCookies(req){
+  const out = {};
+  const h = req.headers.cookie;
+  if(!h) return out;
+  h.split(";").forEach(p => {
+    const i = p.indexOf("=");
+    if(i > 0) out[p.slice(0, i).trim()] = decodeURIComponent(p.slice(i + 1).trim());
+  });
+  return out;
+}
+
+function sessionGid(req){
+  const c = parseCookies(req);
+  return unsignValue(c[SESSION_COOKIE]);
+}
+
+function setSessionCookie(res, gid, secure){
+  const v = signValue(gid);
+  res.setHeader("Set-Cookie",
+    SESSION_COOKIE + "=" + encodeURIComponent(v) +
+    "; Path=/; HttpOnly; SameSite=Lax; Max-Age=" + Math.floor(SESSION_MAX_AGE / 1000) +
+    (secure ? "; Secure" : ""));
+}
+
+function clearSessionCookie(res){
+  res.setHeader("Set-Cookie", SESSION_COOKIE + "=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0");
+}
+
+/* ساخت redirect_uri از روی هاست درخواست (Render همیشه https است) */
+function redirectUri(req){
+  const ext = process.env.RENDER_EXTERNAL_URL;
+  if(ext) return ext.replace(/\/$/, "") + "/api/auth/google/callback";
+  const proto = req.headers["x-forwarded-proto"] || "http";
+  return proto + "://" + req.get("host") + "/api/auth/google/callback";
+}
+
+function base64urlJson(str){
+  try{ return JSON.parse(Buffer.from(str, "base64url").toString("utf8")); }
+  catch(e){ return null; }
+}
+
+function googleOAuthConfigured(){
+  return !!(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET);
+}
+
+/* ==================================================
+   USER REGISTRY
+   ================================================== */
+
+const users = new Map();
+
+function ensureUser(gid, profile){
+  let u = users.get(gid);
+  if(u){
+    /* به‌روزرسانی پروفایل گوگل */
+    if(profile && (profile.email || profile.name || profile.picture)){
+      if(profile.email && profile.email !== u.meta.email) u.meta.email = profile.email;
+      if(profile.name) u.meta.name = profile.name;
+      if(profile.picture) u.meta.picture = profile.picture;
+      u.saveMeta();
+    }
+    u.meta.lastSeen = Date.now();
+    return u;
+  }
+  u = new UserBot(gid, profile || {});
+  users.set(gid, u);
+  u.meta.lastSeen = Date.now();
+  u.saveMeta();
+  saveUserIndex();
+  console.log("👤 کاربر جدید: " + (profile?.email || gid));
+  return u;
+}
+
+function getUser(gid){ return users.get(gid) || null; }
+
+function activeBotCount(){
+  let n = 0;
+  for(const u of users.values()) if(u.sock) n++;
+  return n;
+}
+
+/* ==================================================
+   USER BOT — یک نمونه کامل و ایزوله برای هر کاربر
+   ================================================== */
+
+class UserBot {
+  constructor(gid, profile){
+    this.gid = gid;
+    this.dir = path.join(USERS_DIR, gid);
+    this.authDir = path.join(this.dir, "auth_info");
+    this.metaFile = path.join(this.dir, "meta.json");
+    this.configFile = path.join(this.dir, "config.json");
+    this.receiptsFile = path.join(this.dir, "receipts.json");
+    this.confirmFile = path.join(this.dir, "confirm.json");
+
+    this.meta = {
+      gid,
+      email: profile.email || "",
+      name: profile.name || "",
+      picture: profile.picture || "",
+      createdAt: Date.now(),
+      lastSeen: Date.now()
+    };
+
+    this.runtimeConfig = { targetGroups: [], allowedNumbers: [], enabled: true };
+    this.receipts = { list: [] };
+    this.confirmCfg = {
+      enabled: false,
+      ownerJid: null,
+      ownerName: "",
+      sourceGroups: [],
+      contacts: {},
+      queue: {}
+    };
+
+    this.sock = null;
+    this.botJid = null;
+    this.botNumber = null;
+    this.currentQR = null;
+    this.currentQRImage = null;
+    this.connectionState = "disconnected";
+    this.groupsCache = [];
+    this.clients = new Set(); /* سوکت‌های WS پنل این کاربر */
+
+    this.queue = [];
+    this.isProcessing = false;
+    this.lastProcessTime = 0;
+    this.loggedOut = false;
+    this.connecting = false;
+
+    fs.mkdirSync(this.dir, { recursive: true });
+  }
+
+  /* ---------- META ---------- */
+  saveMeta(){
+    try{ fs.writeFileSync(this.metaFile, JSON.stringify(this.meta, null, 2)); }catch(e){}
+  }
+
+  /* ---------- DATA ---------- */
+  loadLocal(){
+    this.loadConfig();
+    this.loadReceipts();
+    this.loadConfirm();
+  }
+
+  loadConfig(){
+    try{
+      if(fs.existsSync(this.configFile)){
+        Object.assign(this.runtimeConfig, JSON.parse(fs.readFileSync(this.configFile, "utf8")));
+      }
+      if(this.runtimeConfig.targetGroupJid && !(this.runtimeConfig.targetGroups || []).length){
+        this.runtimeConfig.targetGroups = [{ jid: this.runtimeConfig.targetGroupJid, name: this.runtimeConfig.targetGroupName || "" }];
+      }
+      delete this.runtimeConfig.targetGroupJid;
+      delete this.runtimeConfig.targetGroupName;
+      this.runtimeConfig.targetGroups = this.runtimeConfig.targetGroups || [];
+    }catch(e){ console.error("loadConfig:", e.message); }
+  }
+
+  saveConfig(){
+    try{ fs.writeFileSync(this.configFile, JSON.stringify(this.runtimeConfig, null, 2)); }
+    catch(e){ console.error("saveConfig:", e.message); }
+  }
+
+  loadReceipts(){
+    try{
+      if(fs.existsSync(this.receiptsFile)){
+        const raw = fs.readFileSync(this.receiptsFile, "utf8").trim();
+        if(!raw){ this.receipts = { list: [] }; this.saveReceipts(); return; }
+        const data = JSON.parse(raw);
+        this.receipts = { list: [], ...data };
+        console.log("💾 [" + this.gid.slice(0, 10) + "]", this.receipts.list.length, "فیش بارگذاری شد");
+      }
+    }catch(e){
+      console.error("loadReceipts:", e.message);
+      this.receipts = { list: [] };
+      this.saveReceipts();
+    }
+  }
+
+  saveReceipts(){
+    try{ fs.writeFileSync(this.receiptsFile, JSON.stringify(this.receipts, null, 2)); }
+    catch(e){ console.error("saveReceipts:", e.message); }
+    scheduleBackup(this.gid);
+  }
+
+  getReceiptsForPanel(){
+    return this.receipts.list
+      .slice()
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .map(r => ({
+        id: r.id,
+        sender: r.sender,
+        timestamp: r.timestamp,
+        source: r.source || "image",
+        data: r.data
+      }));
+  }
+
+  loadConfirm(){
+    try{
+      if(fs.existsSync(this.confirmFile)){
+        this.confirmCfg = Object.assign(this.confirmCfg, JSON.parse(fs.readFileSync(this.confirmFile, "utf8")));
+      }
+    }catch(e){ console.error("loadConfirm:", e.message); }
+  }
+
+  saveConfirm(){
+    try{ fs.writeFileSync(this.confirmFile, JSON.stringify(this.confirmCfg, null, 2)); }catch(e){}
+    scheduleBackup(this.gid);
+  }
+
+  trimConfirmQueue(){
+    const keys = Object.keys(this.confirmCfg.queue);
+    if(keys.length > 200){
+      for(let i = 0; i < keys.length - 200; i++) delete this.confirmCfg.queue[keys[i]];
+    }
+  }
+
+  confirmPublic(){
+    this.trimConfirmQueue();
+    const contacts = Object.entries(this.confirmCfg.contacts).map(([jid, name]) => ({ jid, name: name || jid.split("@")[0] }));
+    const seen = new Set(contacts.map(c => c.jid));
+    for(const r of this.receipts.list){
+      const jid = r.sender + "@s.whatsapp.net";
+      if(!seen.has(jid)){ contacts.push({ jid, name: r.sender, fromReceipts: true }); seen.add(jid); }
+    }
+    const queue = Object.values(this.confirmCfg.queue);
+    return {
+      enabled: this.confirmCfg.enabled,
+      ownerJid: this.confirmCfg.ownerJid,
+      ownerName: this.confirmCfg.ownerName,
+      sourceGroups: this.confirmCfg.sourceGroups,
+      pending: queue.filter(q => !q.answered).length,
+      queue: queue.slice(-30).reverse(),
+      contacts
+    };
+  }
+
+  /* ---------- QUEUE ---------- */
+  enqueueTask(task){
+    this.queue.push(task);
+    console.log("📋 [" + this.gid.slice(0, 10) + "] صف: " + this.queue.length + " در انتظار");
+    this.processQueue();
+  }
+
+  async processQueue(){
+    if(this.isProcessing) return;
+    if(!this.queue.length) return;
+    this.isProcessing = true;
+    while(this.queue.length){
+      const task = this.queue.shift();
+      const now = Date.now();
+      const timeSinceLast = now - this.lastProcessTime;
+      if(timeSinceLast < QUEUE_DELAY_MS) await sleep(QUEUE_DELAY_MS - timeSinceLast);
+      try{ await task(); }
+      catch(e){ console.error("خطا در صف:", e.message); }
+      this.lastProcessTime = Date.now();
+    }
+    this.isProcessing = false;
+  }
+
+  /* ---------- PANEL BROADCAST ---------- */
+  broadcast(data){
+    const msg = JSON.stringify(data);
+    for(const c of this.clients){
+      try{ if(c.readyState === WebSocket.OPEN) c.send(msg); }catch(e){}
+    }
+  }
+
+  statePayload(){
+    return {
+      type: "state",
+      state: this.connectionState, qr: this.currentQR, qrImage: this.currentQRImage, botNumber: this.botNumber,
+      groups: this.groupsCache, config: this.runtimeConfig,
+      confirm: this.confirmPublic(),
+      models: { text: TEXT_MODEL, vision: VISION_MODEL },
+      keys: keyManager.power()
+    };
+  }
+
+  broadcastState(){
+    this.broadcast(this.statePayload());
+  }
+
+  /* ---------- WHATSAPP ---------- */
+  async connect(){
+    if(this.connecting || this.sock) return;
+    this.connecting = true;
+    this.loggedOut = false;
+    this.connectionState = "connecting";
+    this.broadcastState();
+
+    try{
+      const { state, saveCreds } = await useMultiFileAuthState(this.authDir);
+      let version;
+      try{ ({ version } = await fetchLatestWaWebVersion()); }
+      catch(e){ console.warn("⚠️ دریافت نسخه واتساپ ناموفق — از پیش‌فرض استفاده می‌شود"); }
+
+      const sock = makeWASocket({
+        version,
+        logger: pino({ level: "silent" }),
+        printQRInTerminal: false,
+        auth: state,
+        browser: ["Ubuntu", "Chrome", "20.0.0"],
+        markOnlineOnConnect: false,
+        syncFullHistory: false
+      });
+      this.sock = sock;
+      this.bindSocket(sock, saveCreds);
+    }catch(e){
+      console.error("خطای اتصال [" + this.gid.slice(0, 10) + "]:", e.message);
+      this.sock = null;
+      this.connecting = false;
+      this.connectionState = "disconnected";
+      this.broadcastState();
+    }
+  }
+
+  bindSocket(sock, saveCreds){
+    sock.ev.on("creds.update", saveCreds);
+
+    sock.ev.on("connection.update", async (update) => {
+      const { connection, lastDisconnect, qr } = update;
+
+      if(qr){
+        this.currentQR = qr;
+        this.connectionState = "qr";
+        try{ this.currentQRImage = await QRCode.toDataURL(qr, { margin: 2, width: 320 }); }
+        catch(e){ this.currentQRImage = null; }
+        this.broadcastState();
+        console.log("📱 [" + this.gid.slice(0, 10) + "] QR جدید");
+      }
+
+      if(connection === "open"){
+        this.connecting = false;
+        this.connectionState = "connected";
+        this.currentQR = null; this.currentQRImage = null;
+        this.botJid = sock.user.id;
+        this.botNumber = this.botJid.split(":")[0].split("@")[0];
+        console.log("✅ [" + this.gid.slice(0, 10) + "] متصل شد | شماره:", this.botNumber);
+
+        try{ await ensureModels(); }catch(e){ console.error("detectModels:", e.message); }
+        try{ await this.fetchGroups(); console.log("📋", this.groupsCache.length, "گروه"); }catch(e){}
+        this.broadcastState();
+        scheduleBackup(this.gid);
+      }
+
+      if(connection === "close"){
+        const code = new Boom(lastDisconnect?.error)?.output?.statusCode;
+        const loggedOut = code === DisconnectReason.loggedOut;
+        this.sock = null;
+        this.connecting = false;
+        this.connectionState = "disconnected";
+        this.broadcastState();
+        console.log("❌ [" + this.gid.slice(0, 10) + "] قطع. کد:", code);
+        if(loggedOut){
+          this.loggedOut = true;
+          try{ if(fs.existsSync(this.authDir)) fs.rmSync(this.authDir, { recursive: true, force: true }); }catch(e){}
+          console.log("🚪 [" + this.gid.slice(0, 10) + "] نشست از واتساپ حذف شد — نیازمند QR جدید");
+        }else{
+          setTimeout(() => this.connect().catch(() => {}), 5000);
         }
       }
-      console.log("📤 تکراری ❌");
-    }
-    else if(result.status === "not_receipt"){
-      // عکس فیش نبود — کاملاً بی‌صدا: نه ریپلای، نه ری‌اکشن (حتی ری‌اکشن در حال پردازش هم پاک می‌شود)
-      try{ await sock.sendMessage(msg.key.remoteJid, { react: { text: "", key: msg.key } }); }catch{}
-      console.log("🤫 عکس فیش نبود — نادیده گرفته شد (بی‌صدا)");
-    }
-    else if(result.status === "error"){
-      await sendReaction(msg, REACTION_ERROR);
-      await sock.sendMessage(msg.key.remoteJid, { text: result.message || MSG_ERROR }, { quoted: msg });
-    }
-    else if(result.status === "saved"){
-      await sendReaction(msg, REACTION_NEW);
-      console.log("📤 جدید 🆕");
-    }
-  }catch(err){
-    console.error("❌ خطا processReceiptTask:", err.message);
-    try{ await sendReaction(msg, REACTION_ERROR); }catch{}
-  }
-}
+    });
 
-/* ==================================================
-   CONFIRM FLOW — پردازش و فوروارد فیش به صاحب کارت
-   ================================================== */
+    sock.ev.on("messages.upsert", async ({ messages, type }) => {
+      /* ری‌اکشن‌ها گاهی با type=append می‌آیند — برای ری‌اکشن و کش مخاطبین هر دو نوع پردازش می‌شود */
+      if(type !== "notify" && type !== "append") return;
 
-function groupNameOf(jid){
-  const g = groupsCache.find(x => x.jid === jid);
-  return g ? g.name : "";
-}
+      for(const msg of messages){
+        try{
+          const rJid = msg.key.remoteJid || "";
 
-async function processConfirmTask(msg, msgType){
-  try{
-    const senderJid = msg.key.participant || msg.key.remoteJid;
-    const senderNum = senderJid.split("@")[0].split(":")[0];
-    const groupJid = msg.key.remoteJid;
-    const gName = groupNameOf(groupJid) || groupJid;
-
-    /* 🔍 در حال اسکن */
-    try{ await sock.sendMessage(groupJid, { react: { text: CONFIRM_SCAN, key: msg.key } }); }catch{}
-
-    let imageData = null;
-    if(msgType === "image") imageData = await downloadImage(msg);
-    else imageData = await downloadPdf(msg);
-
-    if(!imageData){
-      try{ await sock.sendMessage(groupJid, { react: { text: "", key: msg.key } }); }catch{}
-      return;
-    }
-
-    let info = null;
-    try{ info = await extractReceiptInfo(imageData.base64); }catch(e){ info = null; }
-
-    if(!info || info.isReceipt === false){
-      /* فیش نبود — بی‌صدا رها کن */
-      try{ await sock.sendMessage(groupJid, { react: { text: "", key: msg.key } }); }catch{}
-      console.log("🤫 تایید: فیش نبود — نادیده گرفته شد");
-      return;
-    }
-
-    /* فوروارد فایل اصلی به صاحب کارت */
-    const raw = await downloadMediaMessage(msg, "buffer", {},
-      { logger: pino({ level: "silent" }), reuploadRequest: sock.updateMediaMessage });
-
-    const lines = ["📩 *فیش جدید — نیازمند تأیید شما*", ""];
-    if(gName) lines.push("👥 گروه: " + gName);
-    lines.push("👤 فرستنده: " + (msg.pushName || senderNum) + " (" + senderNum + ")");
-    if(info.amount) lines.push("💰 مبلغ: " + info.amount + " " + (info.currency || ""));
-    if(info.bank) lines.push("🏦 بانک: " + info.bank);
-    if(info.date) lines.push("📅 تاریخ فیش: " + info.date + (info.time ? " — " + info.time : ""));
-    lines.push("");
-    lines.push("بعد از بررسی حساب، روی همین پیام ری‌اکشن بزن — همان ری‌اکشن دقیقا در گروه روی فیش نشان داده می‌شود ⬇️");
-
-    let sent = null;
-    if(msgType === "pdf"){
-      sent = await sock.sendMessage(confirmCfg.ownerJid, {
-        document: raw, mimetype: "application/pdf", fileName: "receipt.pdf",
-        caption: lines.join("\n")
-      });
-    }else{
-      const mt = msg.message?.imageMessage?.mimetype || "image/jpeg";
-      sent = await sock.sendMessage(confirmCfg.ownerJid, {
-        image: raw, mimetype: mt, caption: lines.join("\n")
-      });
-    }
-
-    if(!sent || !sent.key || !sent.key.id){
-      console.error("تایید: فوروارد ناموفق");
-      try{ await sock.sendMessage(groupJid, { react: { text: "⚠️", key: msg.key } }); }catch{}
-      return;
-    }
-
-    confirmCfg.queue[sent.key.id] = {
-      origJid: groupJid,
-      origId: msg.key.id,
-      participant: msg.key.participant || null,
-      group: gName,
-      sender: senderNum,
-      amount: info.amount || "",
-      currency: info.currency || "",
-      ts: Date.now(),
-      answered: false,
-      answer: ""
-    };
-    trimConfirmQueue();
-    saveConfirm();
-    broadcastState();
-
-    /* ⏫ در انتظار تأیید */
-    await sock.sendMessage(groupJid, { react: { text: CONFIRM_WAIT, key: msg.key } });
-    console.log("📤 تایید: فیش به صاحب کارت فوروارد شد | گروه:", gName);
-  }catch(e){
-    console.error("processConfirmTask:", e.message);
-    try{ await sock.sendMessage(msg.key.remoteJid, { react: { text: "⚠️", key: msg.key } }); }catch{}
-  }
-}
-
-/* ==================================================
-   WHATSAPP
-   ================================================== */
-
-async function connectToWhatsApp(){
-  connectionState = "connecting";
-  broadcastState();
-
-  const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
-  let version;
-  try{ ({ version } = await fetchLatestWaWebVersion()); }
-  catch(e){ console.warn("⚠️ دریافت نسخه واتساپ ناموفق — از پیش‌فرض استفاده می‌شود"); }
-
-  sock = makeWASocket({
-    version,
-    logger: pino({ level: "silent" }),
-    printQRInTerminal: false,
-    auth: state,
-    browser: ["Ubuntu", "Chrome", "20.0.0"],
-    markOnlineOnConnect: false,
-    syncFullHistory: false
-  });
-
-  sock.ev.on("creds.update", saveCreds);
-
-  sock.ev.on("connection.update", async (update) => {
-    const { connection, lastDisconnect, qr } = update;
-
-    if(qr){
-      currentQR = qr;
-      connectionState = "qr";
-      try{ currentQRImage = await QRCode.toDataURL(qr, { margin: 2, width: 320 }); }
-      catch(e){ currentQRImage = null; }
-      broadcastState();
-      console.log("📱 QR جدید");
-    }
-
-    if(connection === "open"){
-      connectionState = "connected";
-      currentQR = null; currentQRImage = null;
-      botJid = sock.user.id;
-      botNumber = botJid.split(":")[0].split("@")[0];
-      console.log("✅ متصل شد | شماره:", botNumber);
-
-      try{ await detectModels(); }catch(e){ console.error("detectModels:", e.message); }
-      try{ await fetchGroups(); console.log("📋", groupsCache.length, "گروه"); }catch(e){}
-      broadcastState();
-    }
-
-    if(connection === "close"){
-      const code = new Boom(lastDisconnect?.error)?.output?.statusCode;
-      const reconnect = code !== DisconnectReason.loggedOut;
-      connectionState = "disconnected";
-      broadcastState();
-      console.log("❌ قطع. کد:", code);
-      if(reconnect) setTimeout(connectToWhatsApp, 5000);
-    }
-  });
-
-  sock.ev.on("messages.upsert", async ({ messages, type }) => {
-    /* توجه: ری‌اکشن‌ها گاهی با type=append می‌آیند — برای ری‌اکشن و کش مخاطبین هر دو نوع پردازش می‌شود */
-    if(type !== "notify" && type !== "append") return;
-
-    for(const msg of messages){
-      try{
-        const rJid = msg.key.remoteJid || "";
-
-        /* کش مخاطبین — شامل jidهای @lid (واتساپ جدید) — برای انتخاب صاحب کارت در پنل */
-        if((rJid.endsWith("@s.whatsapp.net") || rJid.endsWith("@lid")) && !msg.key.fromMe){
-          const known = confirmCfg.contacts[rJid];
-          if(!known || (msg.pushName && msg.pushName !== known)){
-            confirmCfg.contacts[rJid] = msg.pushName || known || "";
-            saveConfirm();
-          }
-        }
-
-        /* ری‌اکشن روی فیش فورواردشده → انتقال به گروه
-           (شناسایی فقط با id پیام ردیابی‌شده — چنین id فقط در چت صاحب کارت وجود دارد؛
-           بررسی سخت‌گیرانه ownerJid حذف شد چون چت خصوصی ممکن است با jid typu @lid بیاید) */
-        const rMsg = msg.message?.reactionMessage;
-        if(rMsg && rMsg.text && !rJid.endsWith("@g.us") && !rJid.endsWith("@broadcast") && !msg.key.fromMe){
-          const entry = confirmCfg.queue[rMsg.key?.id];
-          if(entry){
-            entry.answered = true;
-            entry.answer = rMsg.text;
-            entry.answeredBy = rJid;
-            saveConfirm();
-            try{
-              await sock.sendMessage(entry.origJid, {
-                react: {
-                  text: rMsg.text,
-                  key: {
-                    remoteJid: entry.origJid,
-                    id: entry.origId,
-                    fromMe: false,
-                    participant: entry.participant || undefined
-                  }
-                }
-              });
-              console.log("✅ تایید: صاحب کارت ری‌اکشن زد", rMsg.text, "→ گروه:", entry.group);
-            }catch(e){ console.error("انتقال ری‌اکشن:", e.message); }
-            broadcastState();
-          }else{
-            console.log("🔎 تایید: ری‌اکشن خارج از صف از", rJid, "| هدف:", (rMsg.key?.id || "").slice(0, 14), "|", rMsg.text);
-          }
-        }
-
-        /* از اینجا به بعد فقط پیام‌های جدید (notify) */
-        if(type !== "notify") continue;
-
-        /* جریان واسطه تایید فیش — مستقل از ربات اصلی */
-        if(confirmCfg.enabled && confirmCfg.ownerJid && rJid.endsWith("@g.us") && !msg.key.fromMe){
-          if(confirmCfg.sourceGroups.some(g => g.jid === rJid)){
-            const cType = getMessageType(msg);
-            if(cType === "image" || cType === "pdf"){
-              const senderJidC = msg.key.participant || rJid;
-              const senderNumC = senderJidC.split("@")[0].split(":")[0];
-              console.log("📩 تایید: ورودی از", senderNumC, "| گروه:", groupNameOf(rJid) || rJid);
-              enqueueTask(() => processConfirmTask(msg, cType));
+          /* کش مخاطبین — شامل jidهای @lid (واتساپ جدید) */
+          if((rJid.endsWith("@s.whatsapp.net") || rJid.endsWith("@lid")) && !msg.key.fromMe){
+            const known = this.confirmCfg.contacts[rJid];
+            if(!known || (msg.pushName && msg.pushName !== known)){
+              this.confirmCfg.contacts[rJid] = msg.pushName || known || "";
+              this.saveConfirm();
             }
           }
+
+          /* ری‌اکشن روی فیش فورواردشده → انتقال به گروه
+             (شناسایی فقط با id پیام ردیابی‌شده — چنین id فقط در چت صاحب کارت وجود دارد) */
+          const rMsg = msg.message?.reactionMessage;
+          if(rMsg && rMsg.text && !rJid.endsWith("@g.us") && !rJid.endsWith("@broadcast") && !msg.key.fromMe){
+            const entry = this.confirmCfg.queue[rMsg.key?.id];
+            if(entry){
+              entry.answered = true;
+              entry.answer = rMsg.text;
+              entry.answeredBy = rJid;
+              this.saveConfirm();
+              try{
+                await sock.sendMessage(entry.origJid, {
+                  react: {
+                    text: rMsg.text,
+                    key: {
+                      remoteJid: entry.origJid,
+                      id: entry.origId,
+                      fromMe: false,
+                      participant: entry.participant || undefined
+                    }
+                  }
+                });
+                console.log("✅ تایید: صاحب کارت ری‌اکشن زد", rMsg.text, "→ گروه:", entry.group);
+              }catch(e){ console.error("انتقال ری‌اکشن:", e.message); }
+              this.broadcastState();
+            }
+          }
+
+          /* از اینجا به بعد فقط پیام‌های جدید (notify) */
+          if(type !== "notify") continue;
+
+          /* جریان واسطه تایید فیش — مستقل از ربات اصلی */
+          if(this.confirmCfg.enabled && this.confirmCfg.ownerJid && rJid.endsWith("@g.us") && !msg.key.fromMe){
+            if(this.confirmCfg.sourceGroups.some(g => g.jid === rJid)){
+              const cType = getMessageType(msg);
+              if(cType === "image" || cType === "pdf"){
+                const senderJidC = msg.key.participant || rJid;
+                const senderNumC = senderJidC.split("@")[0].split(":")[0];
+                console.log("📩 [" + this.gid.slice(0, 10) + "] تایید: ورودی از", senderNumC, "| گروه:", this.groupNameOf(rJid) || rJid);
+                this.enqueueTask(() => this.processConfirmTask(msg, cType));
+              }
+            }
+          }
+
+          if(!rJid.endsWith("@g.us")) continue;
+          if(msg.key.fromMe) continue;
+          if(!this.runtimeConfig.enabled) continue;
+          if(this.runtimeConfig.targetGroups.length > 0 &&
+             !this.runtimeConfig.targetGroups.some(t => t.jid === msg.key.remoteJid)) continue;
+
+          const msgType = getMessageType(msg);
+          const senderJid = msg.key.participant || msg.key.remoteJid;
+          const senderNumber = senderJid.split("@")[0].split(":")[0];
+
+          if(this.runtimeConfig.allowedNumbers.length > 0 &&
+             !this.runtimeConfig.allowedNumbers.includes(senderNumber)) continue;
+
+          if(msgType !== "image" && msgType !== "pdf") continue;
+
+          console.log("📥 [" + this.gid.slice(0, 10) + "] ورودی از:", senderNumber, "| نوع:", msgType);
+          this.enqueueTask(() => this.processReceiptTask(msg, msgType, senderNumber));
+
+        }catch(err){
+          console.error("❌ خطا:", err.message);
         }
-
-        if(!rJid.endsWith("@g.us")) continue;
-        if(msg.key.fromMe) continue;
-        if(!runtimeConfig.enabled) continue;
-        if(runtimeConfig.targetGroups.length > 0 &&
-           !runtimeConfig.targetGroups.some(t => t.jid === msg.key.remoteJid)) continue;
-
-        const msgType = getMessageType(msg);
-        const senderJid = msg.key.participant || msg.key.remoteJid;
-        const senderNumber = senderJid.split("@")[0].split(":")[0];
-
-        if(runtimeConfig.allowedNumbers.length > 0 &&
-           !runtimeConfig.allowedNumbers.includes(senderNumber)) continue;
-
-        if(msgType !== "image" && msgType !== "pdf") continue;
-
-        console.log("📥 ورودی از:", senderNumber, "| نوع:", msgType);
-        enqueueTask(() => processReceiptTask(msg, msgType, senderNumber));
-
-      }catch(err){
-        console.error("❌ خطا:", err.message);
       }
-    }
-  });
+    });
 
-  sock.ev.on("groups.update", async () => {
-    try{ await fetchGroups(); broadcastState(); }catch{}
-  });
-  sock.ev.on("group-participants.update", async () => {
-    try{ await fetchGroups(); broadcastState(); }catch{}
-  });
+    sock.ev.on("groups.update", async () => {
+      try{ await this.fetchGroups(); this.broadcastState(); }catch(e){}
+    });
+    sock.ev.on("group-participants.update", async () => {
+      try{ await this.fetchGroups(); this.broadcastState(); }catch(e){}
+    });
+  }
+
+  async fetchGroups(){
+    if(!this.sock || this.connectionState !== "connected") return;
+    const chats = await this.sock.groupFetchAllParticipating();
+    const list = Object.keys(chats).map(jid => ({
+      jid, name: chats[jid].subject,
+      participants: chats[jid].participants?.length || 0
+    }));
+    list.sort((a, b) => a.name.localeCompare(b.name));
+    this.groupsCache = list;
+  }
+
+  groupNameOf(jid){
+    const g = this.groupsCache.find(x => x.jid === jid);
+    return g ? g.name : "";
+  }
+
+  async sendReaction(msg, emoji){
+    try{
+      await this.sock.sendMessage(msg.key.remoteJid, {
+        react: { text: emoji, key: msg.key }
+      });
+      return true;
+    }catch(e){ return false; }
+  }
+
+  /* ---------- RECEIPT PIPELINE ---------- */
+  async handleReceipt(imageData, senderNumber, source = "image", msgKey = null){
+    let info;
+    try{
+      info = await extractReceiptInfo(imageData.base64);
+    }catch(e){
+      console.error("extractReceiptInfo نهایی:", e.message);
+      return { status: "error", message: source === "pdf" ? MSG_PDF_ERROR : MSG_ERROR };
+    }
+
+    if(info.isReceipt === false) return { status: "not_receipt", message: MSG_NOT_RECEIPT };
+
+    const dup = findDuplicateByVision(this.receipts.list, info);
+
+    if(dup){
+      console.log("🔁 تکراری — لایه: " + dup.layer + " — " + (dup.score * 100).toFixed(1) + "%");
+      return { status: "duplicate", score: dup.score, matched: dup.record, layer: dup.layer };
+    }
+
+    const id = "rc_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7);
+    const record = { id, data: info, sender: senderNumber, timestamp: Date.now(), source, msgKey: msgKey || null };
+    this.receipts.list.push(record);
+    this.saveReceipts();
+    this.broadcast({ type: "receipts", receipts: this.getReceiptsForPanel() });
+    console.log("✅ فیش جدید ذخیره شد:", id);
+    return { status: "saved", id };
+  }
+
+  async processReceiptTask(msg, msgType, senderNumber){
+    try{
+      await this.sendReaction(msg, REACTION_PROCESSING);
+
+      let imageData = null;
+      let source = "image";
+
+      if(msgType === "image"){
+        imageData = await downloadImage(this.sock, msg);
+      }else if(msgType === "pdf"){
+        source = "pdf";
+        imageData = await downloadPdf(this.sock, msg);
+      }
+
+      if(!imageData){
+        await this.sendReaction(msg, REACTION_ERROR);
+        await this.sock.sendMessage(msg.key.remoteJid, {
+          text: msgType === "pdf" ? MSG_PDF_ERROR : MSG_ERROR
+        }, { quoted: msg });
+        return;
+      }
+
+      const result = await this.handleReceipt(imageData, senderNumber, source, msg.key);
+
+      if(result.status === "duplicate"){
+        await this.sendReaction(msg, REACTION_DUPLICATE);
+
+        // ---- ریپلای ۱: به پیام فعلی ----
+        await this.sock.sendMessage(msg.key.remoteJid, {
+          text: MSG_DUPLICATE
+        }, { quoted: msg });
+
+        // ---- ریپلای ۲: فقط تاریخ به پیام اصلی ----
+        const matched = result.matched;
+        if(matched && matched.msgKey && matched.msgKey.id && matched.msgKey.remoteJid){
+          try{
+            const rd = matched.data || {};
+            const oldDate = formatDate(matched.timestamp)
+              + (rd.date ? "\n🧾 مورخ فیش: " + rd.date : "")
+              + (rd.time ? " — " + rd.time : "");
+
+            await this.sock.sendMessage(msg.key.remoteJid, {
+              text: oldDate
+            }, { quoted: buildQuoted(matched.msgKey) });
+
+            console.log("📤 ریپلای ۲ با تاریخ:", oldDate);
+          }catch(e){
+            console.error("خطا ریپلای ۲:", e.message);
+          }
+        }
+        console.log("📤 تکراری ❌");
+      }
+      else if(result.status === "not_receipt"){
+        /* فیش نبود — بی‌صدا رها کن */
+        await this.sendReaction(msg, "");
+        console.log("🤫 فیش نبود — نادیده گرفته شد");
+      }
+      else if(result.status === "saved"){
+        await this.sendReaction(msg, REACTION_NEW);
+        console.log("📤 فیش جدید ✅");
+      }
+      else{
+        await this.sendReaction(msg, REACTION_ERROR);
+        await this.sock.sendMessage(msg.key.remoteJid, {
+          text: result.message || MSG_ERROR
+        }, { quoted: msg });
+      }
+    }catch(err){
+      console.error("❌ خطا processReceiptTask:", err.message);
+      try{ await this.sendReaction(msg, REACTION_ERROR); }catch(e){}
+    }
+  }
+
+  async processConfirmTask(msg, msgType){
+    try{
+      const senderJid = msg.key.participant || msg.key.remoteJid;
+      const senderNum = senderJid.split("@")[0].split(":")[0];
+      const groupJid = msg.key.remoteJid;
+      const gName = this.groupNameOf(groupJid) || groupJid;
+
+      /* 🔍 در حال اسکن */
+      try{ await this.sock.sendMessage(groupJid, { react: { text: CONFIRM_SCAN, key: msg.key } }); }catch(e){}
+
+      let imageData = null;
+      if(msgType === "image") imageData = await downloadImage(this.sock, msg);
+      else imageData = await downloadPdf(this.sock, msg);
+
+      if(!imageData){
+        try{ await this.sock.sendMessage(groupJid, { react: { text: "", key: msg.key } }); }catch(e){}
+        return;
+      }
+
+      let info = null;
+      try{ info = await extractReceiptInfo(imageData.base64); }catch(e){ info = null; }
+
+      if(!info || info.isReceipt === false){
+        /* فیش نبود — بی‌صدا رها کن */
+        try{ await this.sock.sendMessage(groupJid, { react: { text: "", key: msg.key } }); }catch(e){}
+        console.log("🤫 تایید: فیش نبود — نادیده گرفته شد");
+        return;
+      }
+
+      /* فوروارد فایل اصلی به صاحب کارت */
+      const raw = await downloadMediaMessage(msg, "buffer", {},
+        { logger: pino({ level: "silent" }), reuploadRequest: this.sock.updateMediaMessage });
+
+      const lines = ["📩 *فیش جدید — نیازمند تأیید شما*", ""];
+      if(gName) lines.push("👥 گروه: " + gName);
+      lines.push("👤 فرستنده: " + (msg.pushName || senderNum) + " (" + senderNum + ")");
+      if(info.amount) lines.push("💰 مبلغ: " + info.amount + " " + (info.currency || ""));
+      if(info.bank) lines.push("🏦 بانک: " + info.bank);
+      if(info.date) lines.push("📅 تاریخ فیش: " + info.date + (info.time ? " — " + info.time : ""));
+      lines.push("");
+      lines.push("بعد از بررسی حساب، روی همین پیام ری‌اکشن بزن — همان ری‌اکشن دقیقا در گروه روی فیش نشان داده می‌شود ⬇️");
+
+      let sent = null;
+      if(msgType === "pdf"){
+        sent = await this.sock.sendMessage(this.confirmCfg.ownerJid, {
+          document: raw, mimetype: "application/pdf", fileName: "receipt.pdf",
+          caption: lines.join("\n")
+        });
+      }else{
+        const mt = msg.message?.imageMessage?.mimetype || "image/jpeg";
+        sent = await this.sock.sendMessage(this.confirmCfg.ownerJid, {
+          image: raw, mimetype: mt, caption: lines.join("\n")
+        });
+      }
+
+      if(!sent || !sent.key || !sent.key.id){
+        console.error("تایید: فوروارد ناموفق");
+        try{ await this.sock.sendMessage(groupJid, { react: { text: "⚠️", key: msg.key } }); }catch(e){}
+        return;
+      }
+
+      this.confirmCfg.queue[sent.key.id] = {
+        origJid: groupJid,
+        origId: msg.key.id,
+        participant: msg.key.participant || null,
+        group: gName,
+        sender: senderNum,
+        amount: info.amount || "",
+        currency: info.currency || "",
+        ts: Date.now(),
+        answered: false,
+        answer: ""
+      };
+      this.trimConfirmQueue();
+      this.saveConfirm();
+      this.broadcastState();
+
+      /* ⏫ در انتظار تأیید */
+      await this.sock.sendMessage(groupJid, { react: { text: CONFIRM_WAIT, key: msg.key } });
+      console.log("📤 تایید: فیش به صاحب کارت فوروارد شد | گروه:", gName);
+    }catch(e){
+      console.error("processConfirmTask:", e.message);
+      try{ await this.sock.sendMessage(msg.key.remoteJid, { react: { text: "⚠️", key: msg.key } }); }catch(err){}
+    }
+  }
+
+  /* ---------- WHATSAPP LOGOUT ---------- */
+  async waLogout(){
+    try{
+      if(this.sock){ try{ await this.sock.logout(); }catch(e){} }
+      this.sock = null;
+    }catch(e){}
+    try{ if(fs.existsSync(this.authDir)) fs.rmSync(this.authDir, { recursive: true, force: true }); }catch(e){}
+    /* sha cache برای فایل‌های نشست این کاربر باطل شود */
+    for(const k of pushedShaCache.keys()){
+      if(k.startsWith("users/" + this.gid + "/auth_info/")) pushedShaCache.delete(k);
+    }
+    this.connectionState = "disconnected";
+    this.currentQR = null; this.currentQRImage = null;
+    this.botJid = null; this.botNumber = null; this.groupsCache = [];
+    this.broadcastState();
+    setTimeout(() => this.connect().catch(() => {}), 1500);
+  }
 }
 
 /* ==================================================
-   WS
+   EXPRESS + WS
    ================================================== */
+
+const app = express();
+app.use(express.json({ limit: "10mb" }));
+app.use(express.static(path.join(__dirname, "public")));
+
+/* احراز هویت سشن — همه APIها به جز auth نیاز به کوکی دارند */
+app.use("/api", (req, res, next) => {
+  if(req.path.startsWith("/auth/") || req.path === "/health") return next();
+  const gid = sessionGid(req);
+  if(!gid) return res.status(401).json({ error: "unauthorized" });
+  /* کوکی امضاشده = خودمان صادرش کرده‌ایم؛ اگر کاربر هنوز ثبت نشده، ساخته می‌شود */
+  let u = getUser(gid);
+  if(!u) u = ensureUser(gid, {});
+  req.user = u;
+  next();
+});
+
+app.get("/api/health", (req, res) => res.json({ ok: true, users: users.size, ts: Date.now() }));
+
+/* ---------- GOOGLE OAUTH ---------- */
+app.get("/api/auth/google", (req, res) => {
+  if(!googleOAuthConfigured()){
+    return res.status(500).send("GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET تنظیم نشده است");
+  }
+  const params = new URLSearchParams({
+    client_id: GOOGLE_CLIENT_ID,
+    redirect_uri: redirectUri(req),
+    response_type: "code",
+    scope: "openid email profile",
+    access_type: "online",
+    prompt: "select_account"
+  });
+  res.redirect("https://accounts.google.com/o/oauth2/v2/auth?" + params.toString());
+});
+
+app.get("/api/auth/google/callback", async (req, res) => {
+  try{
+    if(!googleOAuthConfigured()){
+      return res.status(500).send("GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET تنظیم نشده است");
+    }
+    const code = req.query.code;
+    if(!code) return res.redirect("/?auth=error");
+
+    const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        code: String(code),
+        client_id: GOOGLE_CLIENT_ID,
+        client_secret: GOOGLE_CLIENT_SECRET,
+        redirect_uri: redirectUri(req),
+        grant_type: "authorization_code"
+      })
+    });
+    if(!tokenRes.ok){
+      console.error("google token:", tokenRes.status, await tokenRes.text().catch(() => ""));
+      return res.redirect("/?auth=error");
+    }
+    const tokens = await tokenRes.json();
+    const idToken = tokens.id_token;
+    if(!idToken) return res.redirect("/?auth=error");
+
+    /* payload توکن (بدون verify امضا — کد مستقیما از گوگل آمده) */
+    const parts = idToken.split(".");
+    if(parts.length < 2) return res.redirect("/?auth=error");
+    const payload = base64urlJson(parts[1]);
+    if(!payload || !payload.sub) return res.redirect("/?auth=error");
+    if(payload.email && payload.email_verified === false) return res.redirect("/?auth=error");
+
+    const gid = String(payload.sub);
+    if(!/^[A-Za-z0-9_\-]{5,}$/.test(gid)) return res.redirect("/?auth=error");
+
+    const profile = {
+      email: payload.email || "",
+      name: payload.name || "",
+      picture: payload.picture || ""
+    };
+    const u = ensureUser(gid, profile);
+    u.loadLocal();
+
+    const secure = (req.headers["x-forwarded-proto"] === "https") || !!process.env.RENDER_EXTERNAL_URL;
+    setSessionCookie(res, gid, secure);
+    res.redirect("/?auth=ok");
+  }catch(e){
+    console.error("google callback:", e.message);
+    res.redirect("/?auth=error");
+  }
+});
+
+app.get("/api/auth/me", (req, res) => {
+  const gid = sessionGid(req);
+  if(!gid) return res.status(401).json({ error: "unauthorized" });
+  const u = getUser(gid);
+  if(!u) return res.status(401).json({ error: "unauthorized" });
+  res.json({ gid: u.gid, email: u.meta.email, name: u.meta.name, picture: u.meta.picture });
+});
+
+app.post("/api/auth/logout", (req, res) => {
+  clearSessionCookie(res);
+  res.json({ ok: true });
+});
+
+/* ---------- STATUS / DATA ---------- */
+
+app.get("/api/status", (req, res) => {
+  const u = req.user;
+  res.json({
+    state: u.connectionState, qr: u.currentQR, qrImage: u.currentQRImage, botNumber: u.botNumber,
+    groups: u.groupsCache, config: u.runtimeConfig,
+    models: { text: TEXT_MODEL, vision: VISION_MODEL },
+    keys: keyManager.power(),
+    queue: { pending: u.queue.length, busy: u.isProcessing }
+  });
+});
+
+app.get("/api/keys", async (req, res) => {
+  await keyManager.refreshStatus();
+  res.json({ keys: keyManager.power() });
+});
+
+app.get("/api/receipts", (req, res) => res.json({ receipts: req.user.getReceiptsForPanel() }));
+
+app.delete("/api/receipts/:id", (req, res) => {
+  const u = req.user;
+  const idx = u.receipts.list.findIndex(r => r.id === req.params.id);
+  if(idx < 0) return res.json({ ok: false, error: "not found" });
+  u.receipts.list.splice(idx, 1);
+  u.saveReceipts();
+  u.broadcast({ type: "receipts", receipts: u.getReceiptsForPanel() });
+  res.json({ ok: true });
+});
+
+app.delete("/api/receipts", (req, res) => {
+  const u = req.user;
+  u.receipts = { list: [] };
+  u.saveReceipts();
+  u.broadcast({ type: "receipts", receipts: [] });
+  res.json({ ok: true });
+});
+
+/* ---------- GROUPS / CONFIG ---------- */
+
+app.post("/api/select-group", (req, res) => {
+  const u = req.user;
+  const { jid, name } = req.body;
+  if(!jid) return res.json({ ok: false, error: "jid لازم است" });
+  const idx = u.runtimeConfig.targetGroups.findIndex(t => t.jid === jid);
+  if(idx >= 0){
+    u.runtimeConfig.targetGroups.splice(idx, 1);
+    u.saveConfig(); u.broadcastState();
+    return res.json({ ok: true, selected: false, count: u.runtimeConfig.targetGroups.length });
+  }
+  u.runtimeConfig.targetGroups.push({ jid, name: name || "" });
+  u.saveConfig(); u.broadcastState();
+  res.json({ ok: true, selected: true, count: u.runtimeConfig.targetGroups.length });
+});
+
+app.post("/api/clear-group", (req, res) => {
+  const u = req.user;
+  u.runtimeConfig.targetGroups = [];
+  u.saveConfig(); u.broadcastState();
+  res.json({ ok: true });
+});
+
+app.post("/api/allowed-numbers", (req, res) => {
+  const u = req.user;
+  u.runtimeConfig.allowedNumbers = (req.body.numbers || []).filter(n => /^\d+$/.test(n));
+  u.saveConfig(); u.broadcastState();
+  res.json({ ok: true });
+});
+
+app.post("/api/toggle", (req, res) => {
+  const u = req.user;
+  u.runtimeConfig.enabled = !!req.body.enabled;
+  u.saveConfig(); u.broadcastState();
+  res.json({ ok: true });
+});
+
+app.post("/api/refresh-groups", async (req, res) => {
+  const u = req.user;
+  try{ await u.fetchGroups(); res.json({ ok: true, groups: u.groupsCache }); }
+  catch(e){ res.json({ ok: false, error: e.message }); }
+});
+
+/* ---------- واسطه تایید فیش ---------- */
+
+app.get("/api/confirm", (req, res) => res.json(req.user.confirmPublic()));
+
+app.post("/api/confirm/toggle", (req, res) => {
+  const u = req.user;
+  u.confirmCfg.enabled = !!req.body.enabled;
+  u.saveConfirm(); u.broadcastState();
+  res.json({ ok: true });
+});
+
+app.post("/api/confirm/owner", (req, res) => {
+  const u = req.user;
+  const { jid, name } = req.body;
+  if(!jid || !jid.endsWith("@s.whatsapp.net")) return res.json({ ok: false, error: "شماره معتبر نیست" });
+  u.confirmCfg.ownerJid = jid;
+  u.confirmCfg.ownerName = name || "";
+  u.saveConfirm(); u.broadcastState();
+  res.json({ ok: true });
+});
+
+app.post("/api/confirm/owner-clear", (req, res) => {
+  const u = req.user;
+  u.confirmCfg.ownerJid = null;
+  u.confirmCfg.ownerName = "";
+  u.saveConfirm(); u.broadcastState();
+  res.json({ ok: true });
+});
+
+app.post("/api/confirm/select-group", (req, res) => {
+  const u = req.user;
+  const { jid, name } = req.body;
+  if(!jid) return res.json({ ok: false, error: "jid لازم است" });
+  const idx = u.confirmCfg.sourceGroups.findIndex(g => g.jid === jid);
+  if(idx >= 0) u.confirmCfg.sourceGroups.splice(idx, 1);
+  else u.confirmCfg.sourceGroups.push({ jid, name: name || "" });
+  u.saveConfirm(); u.broadcastState();
+  res.json({ ok: true, selected: idx < 0, count: u.confirmCfg.sourceGroups.length });
+});
+
+app.post("/api/confirm/clear-groups", (req, res) => {
+  const u = req.user;
+  u.confirmCfg.sourceGroups = [];
+  u.saveConfirm(); u.broadcastState();
+  res.json({ ok: true });
+});
+
+app.post("/api/confirm/add-contact", (req, res) => {
+  const u = req.user;
+  let num = String(req.body.number || "").replace(/\D/g, "");
+  if(!num) return res.json({ ok: false, error: "شماره لازم است" });
+  if(num.startsWith("00")) num = num.slice(2);
+  if(num.startsWith("0")) num = num.slice(1);
+  if(num.length <= 10) num = "90" + num; /* پیش‌فرض ترکیه اگر کد کشور داده نشد */
+  const jid = num + "@s.whatsapp.net";
+  u.confirmCfg.contacts[jid] = req.body.name || "";
+  u.saveConfirm(); u.broadcastState();
+  res.json({ ok: true, jid });
+});
+
+/* ---------- WHATSAPP CONNECTION ---------- */
+
+/* شروع اتصال (برای کاربر تازه‌وارد که هنوز باتش وصل نیست) */
+app.post("/api/connect", (req, res) => {
+  const u = req.user;
+  if(u.sock || u.connecting){
+    return res.json({ ok: true, already: true });
+  }
+  if(activeBotCount() >= MAX_CONCURRENT_BOTS && !fs.existsSync(path.join(u.authDir, "creds.json"))){
+    return res.status(503).json({ ok: false, error: "ظرفیت سرور پر است — بعداً تلاش کن" });
+  }
+  u.connect().catch(() => {});
+  res.json({ ok: true });
+});
+
+app.post("/api/logout", async (req, res) => {
+  const u = req.user;
+  try{
+    await u.waLogout();
+    res.json({ ok: true });
+  }catch(e){ res.json({ ok: false, error: e.message }); }
+});
+
+/* ==================================================
+   WS — احراز هویت با کوکی سشن
+   ================================================== */
+
+const server = http.createServer(app);
+const wss = new WebSocket.Server({ server });
+
+function heartbeat(){
+  this.isAlive = true;
+}
 
 wss.on("connection", (ws, req) => {
   try{
-    const u = new URL(req.url, "http://localhost");
-    if(!tokenValid(u.searchParams.get("token"))){
+    const gid = sessionGid(req);
+    const u = gid ? getUser(gid) : null;
+    if(!u){
       ws.close(4001, "unauthorized");
       return;
     }
-  }catch(e){ ws.close(); return; }
-  ws.send(JSON.stringify({
-    type: "state",
-    state: connectionState, qr: currentQR, qrImage: currentQRImage, botNumber,
-    groups: groupsCache, config: runtimeConfig,
-    confirm: confirmPublic(),
-    models: { text: TEXT_MODEL, vision: VISION_MODEL },
-    keys: keyManager.power()
-  }));
-  ws.send(JSON.stringify({
-    type: "receipts",
-    receipts: getReceiptsForPanel()
-  }));
+    ws.gid = gid;
+    ws.isAlive = true;
+    ws.on("pong", heartbeat);
+    u.clients.add(ws);
+    ws.on("close", () => { u.clients.delete(ws); });
+    ws.send(JSON.stringify(u.statePayload()));
+    ws.send(JSON.stringify({
+      type: "receipts",
+      receipts: u.getReceiptsForPanel()
+    }));
+  }catch(e){
+    try{ ws.close(); }catch(err){}
+  }
 });
 
 setInterval(() => {
-  broadcast({ type: "keys", keys: keyManager.power() });
+  wss.clients.forEach(c => {
+    if(c.isAlive === false){ try{ c.terminate(); }catch(e){} return; }
+    c.isAlive = false;
+    try{ c.ping(); }catch(e){}
+  });
+}, 30000);
+
+setInterval(() => {
+  for(const u of users.values()) u.broadcast({ type: "keys", keys: keyManager.power() });
 }, 5000);
 
 /* ==================================================
    START
    ================================================== */
 
+initSessionSecret();
 keyManager.init();
-loadConfig();
-loadReceipts();
-loadConfirm();
 
 execFile("pdftoppm", ["-v"], (err, stdout, stderr) => {
   const out = (stderr || stdout || "").split("\n")[0];
@@ -1805,21 +2041,16 @@ execFile("pdftoppm", ["-v"], (err, stdout, stderr) => {
 server.listen(PORT, () => {
   console.log("");
   console.log("🌐 پنل وب: http://localhost:" + PORT);
-  console.log("🤖 دروازه هوش مصنوعی مرکزی فعال — قدرت:", keyManager.power().totalPower, "کردیت/دقیقه");
-  console.log("💾 فیش‌های ذخیره‌شده:", receipts.list.length);
+  console.log("🤖 نسخه چندکاربره v9.0.0 — ورود با گوگل");
+  console.log("🔑 OAuth گوگل:", googleOAuthConfigured() ? "فعال" : "❌ تنظیم نشده");
+  console.log("💾 حداکثر بات هم‌زمان:", MAX_CONCURRENT_BOTS);
   console.log("🎯 تشخیص تکراری سخت‌گیرانه (Strict)");
-  console.log("🔒 قفل پنل:", hasPin() ? "فعال" : "غیرفعال — اولین ورود پین می‌سازد");
-  console.log(confirmCfg.enabled
-    ? "🤝 واسطه تایید فیش: فعال — صاحب کارت: " + (confirmCfg.ownerJid || "انتخاب نشده")
-    : "🤝 واسطه تایید فیش: غیرفعال");
   console.log("📅 فرمت تاریخ: 2026/09/15 10:14 PM");
   console.log("");
+
   startCloudTasks();
-  restoreFromGithub().finally(() => {
-    connectToWhatsApp().catch(e => {
-      console.error("❌ خطای اتصال اولیه:", e.message);
-      console.log("🔁 تلاش مجدد تا 10 ثانیه دیگر...");
-      setTimeout(() => connectToWhatsApp().catch(()=>{}), 10000);
-    });
+
+  restoreAllFromGithub().finally(() => {
+    ensureModels().catch(e => console.error("خطای اولیه مدل‌ها:", e.message));
   });
 });

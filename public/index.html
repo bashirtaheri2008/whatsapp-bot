@@ -358,6 +358,10 @@ button,input{font-family:inherit}
 .pin-key{aspect-ratio:1.4/1;border-radius:18px;background:var(--bg-3);border:1px solid var(--border);color:var(--text);font-size:20px;font-weight:700;display:flex;align-items:center;justify-content:center;transition:background .12s}
 .pin-key:active{background:var(--accent-glow)}
 .pin-key.dim{font-size:12.5px;font-weight:600;color:var(--text-dim)}
+.glogin{display:flex;align-items:center;justify-content:center;gap:10px;text-decoration:none;margin-top:6px;font-weight:700}
+.account-box{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+.acct-name{font-weight:700;font-size:14px}
+.acct-mail{color:var(--text-dim);font-size:12px;direction:ltr;text-align:right}
 @keyframes pinShake{0%,100%{transform:translateX(0)}20%{transform:translateX(-9px)}40%{transform:translateX(9px)}60%{transform:translateX(-6px)}80%{transform:translateX(6px)}}
 .pin-dots.shake{animation:pinShake .4s}
 .pin-inputs{display:flex;flex-direction:column;gap:10px;margin-bottom:12px}
@@ -367,28 +371,21 @@ button,input{font-family:inherit}
 </head>
 <body>
 
-<!-- ============ PIN LOCK ============ -->
+<!-- ============ LOGIN (GOOGLE) ============ -->
 <div id="lockScreen" class="hidden">
   <div class="lock-inner">
     <div class="lock-badge"><span class="icon" data-lucide="shield-check"></span></div>
     <div>
-      <p class="lock-title" id="lockTitle">پنل قفل است</p>
-      <p class="lock-sub" id="lockSub">پین ۴ رقمی را وارد کن</p>
-    </div>
-    <div class="pin-dots" id="pinDots">
-      <div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div>
+      <p class="lock-title" id="lockTitle">ورود به پنل</p>
+      <p class="lock-sub" id="lockSub">برای مدیریت بات واتساپ خودت با گوگل وارد شو</p>
     </div>
     <p class="lock-err" id="lockErr"></p>
-    <div class="pin-pad" id="pinPad">
-      <button class="pin-key" data-k="1">۱</button><button class="pin-key" data-k="2">۲</button><button class="pin-key" data-k="3">۳</button><button class="pin-key" data-k="4">۴</button><button class="pin-key" data-k="5">۵</button><button class="pin-key" data-k="6">۶</button><button class="pin-key" data-k="7">۷</button><button class="pin-key" data-k="8">۸</button><button class="pin-key" data-k="9">۹</button>
-      <button class="pin-key" style="visibility:hidden"></button>
-      <button class="pin-key" data-k="0">۰</button>
-      <button class="pin-key dim" data-k="del">حذف</button>
-    </div>
+    <a class="btn btn-secondary btn-block glogin" id="googleLoginBtn" href="/api/auth/google">
+      <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.647 6.825 29.582 4.5 24 4.5 12.955 4.5 4.5 12.955 4.5 24S12.955 43.5 24 43.5c10.545 0 19.5-7.615 19.5-19.5 0-1.09-.112-2.153-.317-3.183z"/><path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.647 6.825 29.582 4.5 24 4.5 16.302 4.5 9.698 8.724 6.306 14.691z"/><path fill="#4CAF50" d="M24 44.5c5.582 0 10.674-2.14 14.244-5.611l-6.585-5.559C29.655 35.744 26.989 36.9 24 36.9c-5.211 0-9.639-3.336-11.296-7.945l-6.522 5.025C9.533 41.186 16.194 44.5 24 44.5z"/><path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303c-.792 2.237-2.231 4.166-4.087 5.571l.003-.002 6.585 5.559C37.153 39.614 44.5 33.75 44.5 24c0-1.09-.112-2.153-.317-3.183-.018-.095-.04-.19-.059-.284-.033-.161-.077-.319-.124-.473z"/></svg>
+      ورود با گوگل
+    </a>
   </div>
-</div>
-
-<!-- ============ ONBOARDING (disconnected / connecting / qr) ============ -->
+</div><!-- ============ ONBOARDING (disconnected / connecting / qr) ============ -->
 <div id="screenOnboarding">
   <div class="onb-mark"><span class="icon" id="onbIcon"></span></div>
   <div>
@@ -558,21 +555,13 @@ button,input{font-family:inherit}
         <div id="keysList"></div>
       </div>
 
-      <div class="card">
+            <div class="card">
         <div class="card-head">
-          <div class="ico-badge" data-lucide="shield-check"></div>
-          <h2>قفل پنل</h2>
+          <div class="ico-badge" data-lucide="user-round"></div>
+          <h2>حساب کاربری</h2>
         </div>
-        <div class="pin-inputs">
-          <input class="pin-field" id="curPin" type="password" inputmode="numeric" maxlength="4" placeholder="پین فعلی">
-          <input class="pin-field" id="newPin" type="password" inputmode="numeric" maxlength="4" placeholder="پین جدید">
-          <input class="pin-field" id="newPin2" type="password" inputmode="numeric" maxlength="4" placeholder="تکرار پین جدید">
-        </div>
-        <button class="btn btn-secondary btn-block" id="changePinBtn">تغییر پین</button>
-        <div style="height:10px"></div>
-        <button class="btn btn-secondary btn-block" id="lockNowBtn">قفل فوری پنل</button>
-        <div style="height:10px"></div>
-        <button class="btn btn-danger btn-block" id="removePinBtn">حذف قفل پنل</button>
+        <div class="account-box" id="accountBox"></div>
+        <button class="btn btn-secondary btn-block" id="accountLogoutBtn">خروج از حساب گوگل</button>
       </div>
 
       <div class="card">
@@ -685,20 +674,15 @@ window.addEventListener("resize", () => {
 });
 
 /* ==================================================
-   PIN LOCK
+   AUTH — ورود با گوگل
    ================================================== */
-let authToken = sessionStorage.getItem("waPanelToken") || null;
 let unlocked = false;
-let lockMode = "verify"; /* verify | set */
-let pinBuffer = "";
-let pendingNewPin = "";
 const _rawFetch = window.fetch.bind(window);
 
-/* توکن را به همه درخواستهای API اضافه کن؛ ۴۰۱ = قفل مجدد */
+/* ۴۰۱ = سشن از بین رفته → برگرد به صفحه ورود */
 window.fetch = async function(url, opts){
   opts = opts || {};
   if(typeof url === "string" && url.startsWith("/api")){
-    opts.headers = Object.assign({}, opts.headers || {}, { "x-auth-token": authToken || "" });
     const r = await _rawFetch(url, opts);
     if(r.status === 401 && !url.startsWith("/api/auth")) forceLock();
     return r;
@@ -706,34 +690,25 @@ window.fetch = async function(url, opts){
   return _rawFetch(url, opts);
 };
 
-function renderPinDots(){
-  document.querySelectorAll("#pinDots .pin-dot").forEach((d, i) => d.classList.toggle("filled", i < pinBuffer.length));
-}
-function pinShake(){
-  $("pinDots").classList.add("shake");
-  setTimeout(() => $("pinDots").classList.remove("shake"), 400);
-}
-function showLock(mode){
-  lockMode = mode || "verify";
-  pinBuffer = "";
-  pendingNewPin = "";
-  renderPinDots();
+function showLock(){
   $("lockErr").textContent = "";
-  $("lockTitle").textContent = lockMode === "set" ? "تنظیم قفل پنل" : "پنل قفل است";
-  $("lockSub").textContent = lockMode === "set" ? "یک پین ۴ رقمی انتخاب کن" : "پین ۴ رقمی را وارد کن";
+  try{
+    const qs = new URLSearchParams(location.search);
+    if(qs.get("auth") === "error"){
+      $("lockErr").textContent = "ورود با گوگل ناموفق بود — دوباره تلاش کن";
+      history.replaceState(null, "", "/");
+    }
+  }catch(e){}
   $("lockScreen").classList.remove("hidden");
 }
 function forceLock(){
   unlocked = false;
-  authToken = null;
-  sessionStorage.removeItem("waPanelToken");
   try{ if(ws) ws.close(); }catch(e){}
   if(wsRetry) clearTimeout(wsRetry);
-  showLock("verify");
+  stopHttpFallback();
+  showLock();
 }
-function unlock(token){
-  authToken = token;
-  sessionStorage.setItem("waPanelToken", token);
+function unlock(){
   unlocked = true;
   $("lockScreen").classList.add("hidden");
   connectWS();
@@ -747,55 +722,6 @@ function unlock(token){
     })
     .catch(() => {});
 }
-async function submitPin(pin){
-  const post = (u, body) => _rawFetch(u, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-auth-token": authToken || "" },
-    body: JSON.stringify(body)
-  });
-  if(lockMode === "set"){
-    if(!pendingNewPin){
-      pendingNewPin = pin;
-      pinBuffer = "";
-      renderPinDots();
-      $("lockErr").textContent = "";
-      $("lockSub").textContent = "دوباره همان پین را وارد کن";
-      return;
-    }
-    if(pendingNewPin !== pin){
-      pendingNewPin = "";
-      pinBuffer = "";
-      renderPinDots();
-      pinShake();
-      $("lockSub").textContent = "یک پین ۴ رقمی انتخاب کن";
-      $("lockErr").textContent = "دو پین یکسان نبود — دوباره";
-      return;
-    }
-    const r = await post("/api/auth/setup", { pin });
-    const d = await r.json().catch(() => ({}));
-    if(d.ok && d.token){ toast("قفل پنل فعال شد"); unlock(d.token); }
-    else{ pinBuffer = ""; renderPinDots(); $("lockErr").textContent = "خطا در تنظیم پین"; }
-    return;
-  }
-  const r = await post("/api/auth/login", { pin });
-  const d = await r.json().catch(() => ({}));
-  if(d.ok && d.token){ toast("خوش آمدی"); unlock(d.token); return; }
-  if(d.error === "no-pin"){ showLock("set"); return; }
-  pinBuffer = "";
-  renderPinDots();
-  pinShake();
-  $("lockErr").textContent = "پین اشتباه است";
-}
-document.getElementById("pinPad").addEventListener("click", e => {
-  const k = e.target.closest("[data-k]");
-  if(!k) return;
-  if(k.dataset.k === "del"){ pinBuffer = pinBuffer.slice(0, -1); renderPinDots(); return; }
-  if(!/^\d$/.test(k.dataset.k)) return;
-  if(pinBuffer.length >= 4) return;
-  pinBuffer += k.dataset.k;
-  renderPinDots();
-  if(pinBuffer.length === 4) setTimeout(() => submitPin(pinBuffer), 150);
-});
 
 /* ==================================================
    WEBSOCKET
@@ -815,7 +741,7 @@ function startHttpFallback(){
   let cycle = 0;
   const poll = async () => {
     try{
-      const r = await _rawFetch("/api/status", { headers: { "x-auth-token": authToken || "" } });
+      const r = await _rawFetch("/api/status");
       if(!r.ok) return;
       const d = await r.json();
       gotState = true;
@@ -825,12 +751,12 @@ function startHttpFallback(){
       state.models = d.models || state.models; state.keys = d.keys || state.keys;
       state.queue = d.queue || state.queue;
       try{
-        const c = await _rawFetch("/api/confirm", { headers: { "x-auth-token": authToken || "" } });
+        const c = await _rawFetch("/api/confirm");
         if(c.ok){ state.confirm = (await c.json()) || state.confirm; }
       }catch(e){}
       render();
       if(cycle++ % 3 === 0){
-        const rr = await _rawFetch("/api/receipts", { headers: { "x-auth-token": authToken || "" } });
+        const rr = await _rawFetch("/api/receipts");
         if(rr.ok){
           const rd = await rr.json();
           receiptsData = rd.receipts || [];
@@ -845,7 +771,7 @@ function startHttpFallback(){
 
 function connectWS(){
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
-  ws = new WebSocket(proto + "//" + location.host + "/?token=" + encodeURIComponent(authToken || ""));
+  ws = new WebSocket(proto + "//" + location.host + "/");
 
   ws.onopen = () => { wsFailCount = 0; stopHttpFallback(); if(wsRetry) clearTimeout(wsRetry); };
 
@@ -1382,22 +1308,7 @@ document.addEventListener("touchend", e => {
   lastTouchEnd = now;
 }, { passive:false });
 
-/* شروع: ابتدا بررسی قفل پنل، سپس بارگذاری داده‌ها */
-(async function initLock(){
-  try{
-    const r = await _rawFetch("/api/auth/status");
-    const st = await r.json().catch(() => ({}));
-    if(st && st.hasPin){
-      if(authToken){
-        const c = await _rawFetch("/api/auth/check", { headers: { "x-auth-token": authToken } }).catch(() => null);
-        if(c && c.ok){ unlock(authToken); return; }
-      }
-      showLock("verify");
-    }else{
-      showLock("set");
-    }
-  }catch(e){ showLock("verify"); }
-})();
+
 
 setInterval(() => {
   if(unlocked && state.connectionState === "connected"){
@@ -1411,41 +1322,33 @@ setInterval(() => {
   }
 }, 10000);
 
-/* تنظیمات قفل پنل */
-document.getElementById("changePinBtn").addEventListener("click", async () => {
-  const cur = $("curPin").value.trim();
-  const np = $("newPin").value.trim();
-  const np2 = $("newPin2").value.trim();
-  if(!/^\d{4}$/.test(cur) || !/^\d{4}$/.test(np)){ toast("پینها باید ۴ رقم باشند"); return; }
-  if(np !== np2){ toast("پین جدید و تکرارش یکسان نیست"); return; }
-  if(cur === np){ toast("پین جدید همان قبلی است"); return; }
-  const r = await _rawFetch("/api/auth/change", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-auth-token": authToken || "" },
-    body: JSON.stringify({ currentPin: cur, newPin: np })
-  });
-  const d = await r.json().catch(() => ({}));
-  if(d.ok){ toast("پین تغییر کرد"); $("curPin").value = $("newPin").value = $("newPin2").value = ""; }
-  else if(d.error === "wrong") toast("پین فعلی اشتباه است");
-  else if(d.error === "unauthorized") forceLock();
-  else toast("خطا در تغییر پین");
+/* ==================================================
+   ACCOUNT + INIT
+   ================================================== */
+document.getElementById("accountLogoutBtn").addEventListener("click", async () => {
+  try{ await _rawFetch("/api/auth/logout", { method: "POST" }); }catch(e){}
+  location.reload();
 });
 
-document.getElementById("lockNowBtn").addEventListener("click", () => forceLock());
+(async function loadAccount(){
+  try{
+    const r = await _rawFetch("/api/auth/me");
+    if(!r.ok) return;
+    const me = await r.json();
+    $("accountBox").innerHTML =
+      (me.name ? '<div class="acct-name">' + escapeHtml(me.name) + "</div>" : "") +
+      '<div class="acct-mail">' + escapeHtml(me.email || "") + "</div>";
+  }catch(e){}
+})();
 
-document.getElementById("removePinBtn").addEventListener("click", async () => {
-  const cur = $("curPin").value.trim();
-  if(!/^\d{4}$/.test(cur)){ toast("برای حذف قفل، پین فعلی را در کادر اول وارد کن"); return; }
-  const r = await _rawFetch("/api/auth/remove", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-auth-token": authToken || "" },
-    body: JSON.stringify({ currentPin: cur })
-  });
-  const d = await r.json().catch(() => ({}));
-  if(d.ok){ toast("قفل پنل حذف شد"); $("curPin").value = $("newPin").value = $("newPin2").value = ""; }
-  else if(d.error === "wrong") toast("پین فعلی اشتباه است");
-  else toast("خطا در حذف قفل");
-});
+/* شروع: بررسی سشن گوگل — اگر لاگین است پنل باز می‌شود */
+(async function initAuth(){
+  try{
+    const r = await _rawFetch("/api/auth/me");
+    if(r.ok){ unlock(); return; }
+  }catch(e){}
+  showLock();
+})();
 </script>
 
 </body>
