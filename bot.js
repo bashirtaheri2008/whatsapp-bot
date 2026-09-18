@@ -1830,7 +1830,8 @@ app.get("/api/admin/users", (req, res) => {
 });
 app.post("/api/admin/user", (req, res) => {
   const gid = String(req.body.gid || "");
-  if(!users.has(gid)) return res.status(404).json({ ok: false, error: "کاربر پیدا نشد" });
+  const u = users.get(gid);
+  if(!u) return res.status(404).json({ ok: false, error: "کاربر پیدا نشد" });
   const cur = adminOverrides(gid);
   const ov = {
     allowDup: req.body.allowDup === undefined ? cur.allowDup : !!req.body.allowDup,
@@ -1838,7 +1839,17 @@ app.post("/api/admin/user", (req, res) => {
   };
   adminState.users[gid] = ov;
   saveAdmin();
-  res.json({ ok: true, overrides: ov });
+  /* قفل = سوییچ خود کاربر هم همان لحظه خاموش می‌شود (وضعیتش ذخیره و به پنلش پخش می‌شود) */
+  if(!ov.allowDup && u.runtimeConfig.enabled){
+    u.runtimeConfig.enabled = false;
+    u.saveConfig(); u.broadcastState();
+  }
+  if(!ov.allowConfirm && u.confirmCfg && u.confirmCfg.enabled){
+    u.confirmCfg.enabled = false;
+    u.saveConfirm(); u.broadcastState();
+  }
+  /* آزاد = اختیار با خود کاربر؛ هر وضعیتی دارد نگه داشته می‌شود و می‌تواند عوض کند */
+  res.json({ ok: true, overrides: ov, userState: { enabled: u.runtimeConfig.enabled, confirmEnabled: !!u.confirmCfg.enabled } });
 });
 
 
