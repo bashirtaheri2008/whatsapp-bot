@@ -184,16 +184,6 @@ button,input{font-family:inherit}
 .toggle-switch::after{content:"";position:absolute;top:3px;right:3px;width:21px;height:21px;background:#fff;border-radius:50%;transition:transform .25s cubic-bezier(.34,1.4,.64,1);box-shadow:0 2px 6px rgba(0,0,0,.3)}
 .toggle-switch.on{background:var(--accent)}
 .toggle-switch.on::after{transform:translateX(-19px)}
-.admin-card{background:var(--bg-2);border:1px solid var(--bg-3);border-radius:14px;padding:12px;margin-bottom:10px}
-.admin-card .who{display:flex;align-items:center;gap:10px;margin-bottom:10px}
-.admin-card .who img{width:40px;height:40px;border-radius:11px;object-fit:cover;flex-shrink:0}
-.admin-card .who .ini{width:40px;height:40px;border-radius:11px;background:var(--accent);color:var(--accent-ink);display:flex;align-items:center;justify-content:center;font-weight:800;flex-shrink:0}
-.admin-card .who .mail{font-size:12px;color:var(--text-2);direction:ltr;text-align:right}
-.admin-card .feat{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 0;border-top:1px solid var(--bg-3)}
-.admin-card .feat label{font-size:13px;font-weight:600}
-.admin-card select{background:var(--bg-3);color:var(--text-1);border:1px solid var(--bg-3);border-radius:9px;padding:6px 10px;font-family:inherit;font-size:12px}
-.locked{opacity:.45}
-.lock-note{font-size:11px;color:var(--warn,#f0b400)}
 
 /* ===================== GROUPS ===================== */
 .group-list{display:flex;flex-direction:column;gap:8px}
@@ -577,15 +567,6 @@ button,input{font-family:inherit}
     </section>
 
 <!-- ---------- SETTINGS ---------- -->
-    <section class="panel" id="panel-admin">
-      <div class="page-head" style="padding:0 2px 10px">
-        <h2 style="font-size:19px;font-weight:800">مدیریت کاربران</h2>
-        <p style="font-size:12px;color:var(--text-2);margin-top:4px">کاربران واردشده و وضعیت قابلیت‌هایشان</p>
-      </div>
-      <div id="adminUserList"></div>
-      <button class="btn btn-secondary btn-block" id="adminRefresh">به‌روزرسانی</button>
-    </section>
-
     <section class="panel" id="panel-settings">
 
       <div class="card">
@@ -623,7 +604,6 @@ button,input{font-family:inherit}
     <button class="navbtn active" data-tab="dashboard"><span class="icon" data-lucide="house"></span><span>داشبورد</span></button>
     <button class="navbtn" data-tab="dup"><span class="icon" data-lucide="copy"></span><span>فیش تکراری</span><span class="nav-badge" id="navBadgeGroups">0</span></button>
     <button class="navbtn" data-tab="confirm"><span class="icon" data-lucide="target"></span><span>تأیید فیش</span><span class="nav-badge" id="navBadgeConfirm">0</span></button>
-    <button class="navbtn" data-tab="admin" id="adminNavBtn" style="display:none"><span class="icon" data-lucide="shield"></span><span>مدیریت</span></button>
     <button class="navbtn" data-tab="settings"><span class="icon" data-lucide="settings"></span><span>تنظیمات</span></button>
   </nav>
 
@@ -686,10 +666,8 @@ function formatNumber(n){
 /* ==================================================
    TABS
    ================================================== */
-const TABS = ["dashboard","dup","confirm","admin","settings"];
-let myLock = {};
+const TABS = ["dashboard","dup","confirm","settings"];
 function goToTab(tab){
-  if(tab === "admin") renderAdmin();
   const idx = TABS.indexOf(tab);
   if(idx === -1) return;
   document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
@@ -1004,8 +982,6 @@ function renderConnected(){
 
   const dt = $("dupToggle");
   if(state.config.enabled) dt.classList.add("on"); else dt.classList.remove("on");
-  dt.classList.toggle("locked", myLock.dup === true || myLock.dup === false);
-  dt.title = (myLock.dup === true || myLock.dup === false) ? "توسط مدیر قفل شده" : "";
   syncConfirmDashToggle();
 
   renderKeys();
@@ -1026,8 +1002,6 @@ function renderConfirm(){
   const c = state.confirm || {};
   const ct = $("confirmToggle");
   if(c.enabled) ct.classList.add("on"); else ct.classList.remove("on");
-  ct.classList.toggle("locked", myLock.confirm === true || myLock.confirm === false);
-  ct.title = (myLock.confirm === true || myLock.confirm === false) ? "توسط مدیر قفل شده" : "";
   syncConfirmDashToggle();
 
   /* بج ناوبری + وضعیت داشبورد */
@@ -1381,63 +1355,8 @@ document.getElementById("accountLogoutBtn").addEventListener("click", async () =
       av.onload = () => bm.classList.add("has-avatar");
       av.src = me.picture;
     }
-    myLock = me.lock || {};
-    if(me.admin) $("adminNavBtn").style.display = "";
   }catch(e){}
 })();
-
-/* ==================================================
-   ADMIN PANEL (مدیریت کاربران)
-   ================================================== */
-function fmtState(st){
-  return { connected: "متصل", connecting: "در حال اتصال", qr: "منتظر اسکن QR", disconnected: "قطع" }[st] || st || "قطع";
-}
-function featSelect(gid, feat, info){
-  const opts = [
-    ["", "انتخاب کاربر"],
-    ["true", "روشن (قفل مدیر)"],
-    ["false", "خاموش (قفل مدیر)"]
-  ];
-  const cur = info.override === true ? "true" : info.override === false ? "false" : "";
-  return '<select data-gid="' + gid + '" data-feat="' + feat + '">' +
-    opts.map(o => '<option value="' + o[0] + '"' + (o[0] === cur ? " selected" : "") + ">" + o[1] + "</option>").join("") +
-    "</select>";
-}
-async function renderAdmin(){
-  const box = $("adminUserList");
-  box.innerHTML = '<p style="text-align:center;color:var(--text-2);padding:20px">در حال بارگذاری...</p>';
-  let data;
-  try{ data = await (await fetch("/api/admin/users")).json(); }
-  catch(e){ box.innerHTML = '<p style="color:#f66;text-align:center">خطا در دریافت کاربران</p>'; return; }
-  if(!data.users || !data.users.length){
-    box.innerHTML = '<div class="empty"><p>کاربری نیست</p></div>'; return;
-  }
-  box.innerHTML = "";
-  data.users.forEach(u => {
-    const av = u.picture
-      ? '<img src="' + u.picture + '" alt="" referrerpolicy="no-referrer">'
-      : '<div class="ini">' + escapeHtml((u.name || u.email || "?")[0].toUpperCase()) + "</div>";
-    const el = document.createElement("div");
-    el.className = "admin-card";
-    el.innerHTML =
-      '<div class="who">' + av +
-        '<div><div style="font-weight:700;font-size:14px">' + escapeHtml(u.name || u.email || "بدون نام") + "</div>" +
-        '<div class="mail">' + escapeHtml(u.email || "") + "</div>" +
-        '<div style="font-size:11px;color:var(--text-2);margin-top:2px">ربات: ' + escapeHtml(u.botNumber || "—") + " | " + fmtState(u.state) + "</div></div></div>" +
-      '<div class="feat"><label>تشخیص فیش تکراری</label>' + featSelect(u.gid, "dup", u.dup) + "</div>" +
-      '<div class="feat"><label>تأیید کننده</label>' + featSelect(u.gid, "confirm", u.confirm) + "</div>";
-    box.appendChild(el);
-  });
-  box.querySelectorAll("select").forEach(sel => {
-    sel.addEventListener("change", async () => {
-      const v = sel.value === "true" ? true : sel.value === "false" ? false : null;
-      const body = {}; body[sel.dataset.feat] = v;
-      try{ await apiPost("/api/admin/override", Object.assign({ gid: sel.dataset.gid }, body)); toast("ذخیره شد"); }
-      catch(e){ toast("خطا در ذخیره"); }
-    });
-  });
-}
-$("adminRefresh").addEventListener("click", renderAdmin);
 
 /* شروع: بررسی سشن گوگل — اگر لاگین است پنل باز می‌شود */
 (async function initAuth(){
