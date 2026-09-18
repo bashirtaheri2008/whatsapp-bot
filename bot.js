@@ -1132,6 +1132,21 @@ function ensureUser(gid, profile){
 
 function getUser(gid){ return users.get(gid) || null; }
 
+/* مدیر: اولین کاربر ثبت‌شده یا ایمیل‌های ADMIN_EMAILS */
+function isAdminUser(u){
+  if(!u) return false;
+  const envList = (process.env.ADMIN_EMAILS || "").split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+  if(envList.includes((u.meta.email || "").toLowerCase())) return true;
+  return [...users.keys()][0] === u.gid;
+}
+
+/* قابلیت مؤثر: اولویت با قفل مدیر، بعد انتخاب خود کاربر */
+function featEffective(u, feat){
+  const ov = (u.meta.adminOverride || {})[feat];
+  if(ov === true || ov === false) return ov;
+  return feat === "dup" ? !!u.runtimeConfig.enabled : !!u.confirmCfg.enabled;
+}
+
 function activeBotCount(){
   let n = 0;
   for(const u of users.values()) if(u.sock) n++;
@@ -1472,7 +1487,7 @@ class UserBot {
           if(type !== "notify") continue;
 
           /* جریان واسطه تایید فیش — مستقل از ربات اصلی */
-          if(this.confirmCfg.enabled && this.confirmCfg.ownerJid && rJid.endsWith("@g.us") && !msg.key.fromMe){
+          if(featEffective(this, "confirm") && this.confirmCfg.ownerJid && rJid.endsWith("@g.us") && !msg.key.fromMe){
             if(this.confirmCfg.sourceGroups.some(g => g.jid === rJid)){
               const cType = getMessageType(msg);
               if(cType === "image" || cType === "pdf"){
@@ -1486,7 +1501,7 @@ class UserBot {
 
           if(!rJid.endsWith("@g.us")) continue;
           if(msg.key.fromMe) continue;
-          if(!this.runtimeConfig.enabled) continue;
+          if(!featEffective(this, "dup")) continue;
           if(this.runtimeConfig.targetGroups.length > 0 &&
              !this.runtimeConfig.targetGroups.some(t => t.jid === msg.key.remoteJid)) continue;
 
@@ -1851,7 +1866,38 @@ app.get("/api/auth/me", (req, res) => {
   if(!gid) return res.status(401).json({ error: "unauthorized" });
   const u = getUser(gid);
   if(!u) return res.status(401).json({ error: "unauthorized" });
-  res.json({ gid: u.gid, email: u.meta.email, name: u.meta.name, picture: u.meta.picture });
+  res.json({ gid: u.gid, email: u.meta.email, name: u.meta.name, picture: u.meta.picture,
+             admin: isAdminUser(u), lock: u.meta.adminOverride || {} });
+});
+
+app.get("/api/admin/users", (req, res) => {
+  if(!isAdminUser(req.user)) return res.status(403).json({ error: "forbidden" });
+  res.json({ users: [...users.values()].map(u => ({
+    gid: u.gid,
+    email: u.meta.email || "",
+    name: u.meta.name || "",
+    picture: u.meta.picture || "",
+    botNumber: u.botNumber || "",
+    state: u.connectionState,
+    lastSeen: u.meta.lastSeen || 0,
+    dup: { own: !!u.runtimeConfig.enabled, override: (u.meta.adminOverride || {}).dup === undefined ? null : (u.meta.adminOverride || {}).dup },
+    confirm: { own: !!u.confirmCfg.enabled, override: (u.meta.adminOverride || {}).confirm === undefined ? null : (u.meta.adminOverride || {}).confirm }
+  })) });
+});
+
+app.post("/api/admin/override", (req, res) => {
+  if(!isAdminUser(req.user)) return res.status(403).json({ error: "forbidden" });
+  const target = getUser(req.body.gid);
+  if(!target) return res.status(404).json({ error: "not_found" });
+  const ov = target.meta.adminOverride || {};
+  if("dup" in req.body) ov.dup = (req.body.dup === true || req.body.dup === false) ? req.body.dup : null;
+  if("confirm" in req.body) ov.confirm = (req.body.confirm === true || req.body.confirm === false) ? req.body.confirm : null;
+  target.meta.adminOverride = ov;
+  target.saveMeta();
+  if(ov.dup === true || ov.dup === false){ target.runtimeConfig.enabled = ov.dup; target.saveConfig(); }
+  if(ov.confirm === true || ov.confirm === false){ target.confirmCfg.enabled = ov.confirm; target.saveConfirm(); }
+  target.broadcastState();
+  res.json({ ok: true });
 });
 
 app.post("/api/auth/logout", (req, res) => {
@@ -1937,9 +1983,10 @@ app.post("/api/allowed-numbers", (req, res) => {
 
 app.post("/api/toggle", (req, res) => {
   const u = req.user;
-  u.runtimeConfig.enabled = !!req.body.enabled;
+  const ov = (u.meta.adminOverride || {}).dup;
+  u.runtimeConfig.enabled = (ov === true || ov === false) ? ov : !!req.body.enabled;
   u.saveConfig(); u.broadcastState();
-  res.json({ ok: true });
+  res.json({ ok: true, locked: ov === true || ov === false, enabled: u.runtimeConfig.enabled });
 });
 
 app.post("/api/refresh-groups", async (req, res) => {
@@ -1954,9 +2001,10 @@ app.get("/api/confirm", (req, res) => res.json(req.user.confirmPublic()));
 
 app.post("/api/confirm/toggle", (req, res) => {
   const u = req.user;
-  u.confirmCfg.enabled = !!req.body.enabled;
+  const ov = (u.meta.adminOverride || {}).confirm;
+  u.confirmCfg.enabled = (ov === true || ov === false) ? ov : !!req.body.enabled;
   u.saveConfirm(); u.broadcastState();
-  res.json({ ok: true });
+  res.json({ ok: true, locked: ov === true || ov === false, enabled: u.confirmCfg.enabled });
 });
 
 app.post("/api/confirm/owner", (req, res) => {
