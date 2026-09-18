@@ -1094,12 +1094,14 @@ function renderConfirm(){
 }
 
 $("confirmToggle").addEventListener("click", async () => {
-  const r = await apiPost("/api/confirm/toggle", { enabled: !state.confirm.enabled });
-  if(r.ok) toast(state.confirm.enabled ? "ارسال به تأیید کننده خاموش شد" : "ارسال به تأیید کننده روشن شد");
+  const to = !state.confirm.enabled;
+  const r = await apiPost("/api/confirm/toggle", { enabled: to });
+  if(r.ok) toast(to ? "ارسال به تأیید کننده روشن شد" : "ارسال به تأیید کننده خاموش شد");
 });
 $("confirmDashToggle").addEventListener("click", async () => {
-  const r = await apiPost("/api/confirm/toggle", { enabled: !state.confirm.enabled });
-  if(r.ok) toast(state.confirm.enabled ? "ارسال به تأیید کننده خاموش شد" : "ارسال به تأیید کننده روشن شد");
+  const to = !state.confirm.enabled;
+  const r = await apiPost("/api/confirm/toggle", { enabled: to });
+  if(r.ok) toast(to ? "ارسال به تأیید کننده روشن شد" : "ارسال به تأیید کننده خاموش شد");
 });
 
 $("confirmClearGroups").addEventListener("click", async () => {
@@ -1259,8 +1261,9 @@ async function refreshReceipts(){
 }
 
 async function toggleBot(){
-  const r = await apiPost("/api/toggle", { enabled: !state.config.enabled });
-  if(r.ok) toast(state.config.enabled ? "تشخیص فیش تکراری خاموش شد" : "تشخیص فیش تکراری روشن شد");
+  const to = !state.config.enabled; /* مقصد قبل از درخواست ثابت می‌شود */
+  const r = await apiPost("/api/toggle", { enabled: to });
+  if(r.ok) toast(to ? "تشخیص فیش تکراری روشن شد" : "تشخیص فیش تکراری خاموش شد");
 }
 
 function syncConfirmDashToggle(){
