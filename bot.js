@@ -432,6 +432,64 @@ function findDuplicateByVision(list, newInfo){
 }
 
 /* ==================================================
+   VERIFY DUPLICATE — راستی‌آزمایی دومرحله‌ای پیش از اعلام قطعی
+   قانون: تکراری فقط وقتی اعلام می‌شود که دو خواندن مستقلِ AI
+   همنظر باشند و با رکورد ذخیره‌شده بخوانند. شک = به نفع فیش.
+   ================================================== */
+
+function readableCode(v){
+  v = normalizeText(v);
+  return v && v.length >= 5 ? v : null;
+}
+
+function verifyDuplicateDecision(info, info2, record, layer){
+  const rd = (record && record.data) || {};
+
+  /* خواندن دوم ناموفق بود → قابل اطمینان نیست → تکراری اعلام نمی‌شود */
+  if(!info2 || info2.isReceipt === false)
+    return { confirmed: false, reason: "خواندن دوم ناموفق" };
+
+  /* ثبات خوانش: مبلغ و IBAN فرستنده باید در دو خواندن یکسان باشند */
+  if(normalizeAmount(info.amount) && normalizeAmount(info2.amount) &&
+     normalizeAmount(info.amount) !== normalizeAmount(info2.amount))
+    return { confirmed: false, reason: "مبلغ در دو خواندن متفاوت خوانده شد" };
+  if(normalizeIban(info.senderIban) && normalizeIban(info2.senderIban) &&
+     normalizeIban(info.senderIban) !== normalizeIban(info2.senderIban))
+    return { confirmed: false, reason: "IBAN فرستنده در دو خواندن متفاوت خوانده شد" };
+
+  const UNIQUE_KEYS = ["trackingNo", "receiptNo", "referenceCode"];
+
+  /* ── لایه کد یکتا: همان کد باید در خواندن دوم هم دقیقاً بیاید ── */
+  if(UNIQUE_KEYS.includes(layer)){
+    const v1 = normalizeText(info[layer]);
+    const v2 = normalizeText(info2[layer]);
+    const v0 = normalizeText(rd[layer]);
+    if(v1 && v2 && v1 === v2 && v1 === v0)
+      return { confirmed: true, reason: "کد یکتا (" + layer + ") در دو خواندن مستقل تأیید شد" };
+    return { confirmed: false, reason: "خواندن دوم کد یکتا را تأیید نکرد" };
+  }
+
+  /* ── لایه ترکیب کامل: فقط با ساعتِ با ثانیه، یکسان در هر سه خوانش ── */
+  if(layer === "Strict-Full-Match"){
+    /* اگر هر خواندنی شماره یکتایی خواند، این لایه قابل اتکا نیست */
+    for(const k of UNIQUE_KEYS){
+      if(readableCode(info[k]) || readableCode(info2[k]))
+        return { confirmed: false, reason: "شماره یکتا در خوانش‌ها حاضر است — لایه ترکیب قابل اتکا نیست" };
+    }
+    const hasSeconds = t => t && t.split(":").length === 3;
+    const t1 = normalizeTime(info.time);
+    const t2 = normalizeTime(info2.time);
+    const t0 = normalizeTime(rd.time);
+    if(hasSeconds(t1) && hasSeconds(t2) && hasSeconds(t0) && t1 === t2 && t1 === t0)
+      return { confirmed: true, reason: "ترکیب کامل + ساعت با ثانیه در دو خواندن تأیید شد" };
+    return { confirmed: false, reason: "ساعت با ثانیه در هر سه خوانش تأیید نشد" };
+  }
+
+  /* لایه ناشناخته — محتاطانه: تکراری نیست */
+  return { confirmed: false, reason: "لایه ناشناخته" };
+}
+
+/* ==================================================
    MESSAGE HELPERS
    ================================================== */
 
@@ -1561,8 +1619,27 @@ class UserBot {
     const dup = findDuplicateByVision(this.receipts.list, info);
 
     if(dup){
-      console.log("🔁 تکراری — لایه: " + dup.layer + " — " + (dup.score * 100).toFixed(1) + "%");
-      return { status: "duplicate", score: dup.score, matched: dup.record, layer: dup.layer };
+      /* ── راستی‌آزمایی دومرحله‌ای: پیش از اعلام قطعی، یک خواندن مستقل دیگر ── */
+      console.log("🔁 کاندید تکراری (لایه " + dup.layer + ") — راستی‌آزمایی با خواندن دوم...");
+      let verdict = { confirmed: false, reason: "خواندن دوم انجام نشد" };
+      try{
+        const info2 = await extractReceiptInfo(imageData.base64);
+        verdict = verifyDuplicateDecision(info, info2, dup.record, dup.layer);
+        /* دقت ثبت: کدهای جاافتاده از خواندن دوم پر می‌شوند (فقط فیلدهای خالی) */
+        if(info2 && info2.isReceipt !== false){
+          for(const k of ["trackingNo", "receiptNo", "referenceCode"]){
+            if(!normalizeText(info[k]) && normalizeText(info2[k])) info[k] = info2[k];
+          }
+        }
+      }catch(e){
+        verdict = { confirmed: false, reason: "خطا در خواندن دوم: " + e.message };
+      }
+      if(verdict.confirmed){
+        console.log("✅ تکراری تأییدشده: " + verdict.reason);
+        return { status: "duplicate", score: dup.score, matched: dup.record, layer: dup.layer, verified: verdict.reason };
+      }
+      console.log("🛡 تکراری تأیید نشد → ثبت فیش جدید (" + verdict.reason + ")");
+      /* تأیید نشد → فیش واقعی است؛ ادامه به ذخیره */
     }
 
     const id = "rc_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7);
