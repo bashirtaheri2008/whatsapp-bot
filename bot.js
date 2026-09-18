@@ -1,5 +1,5 @@
 /* ==================================================
-   WhatsApp AI Bot — نسخه چندکاربره (Multi-Tenant) v9.8.2
+   WhatsApp AI Bot — نسخه چندکاربره (Multi-Tenant) v9.0.0
    هر کاربر با گوگل وارد می‌شود → حساب جدا → شماره واتساپ خودش
    دیتای هر کاربر (فیش/تنظیمات/نشست) کاملاً ایزوله است
    ================================================== */
@@ -1847,26 +1847,6 @@ app.use(express.static(path.join(__dirname, "public")));
    ================================================== */
 const ADMIN_KEY = process.env.ADMIN_KEY || "hamgap-admin-2026";
 const ADMIN_FILE = path.join(DATA_ROOT, "admin.json");
-async function wipeCloud(){
-  if(!cloudEnabled()) return { cloud: "غیرفعال (توکن ست نشده)" };
-  try{
-    const t = await ghApi("GET", "/repos/" + GH_REPO + "/git/trees/HEAD?recursive=1");
-    const tree = await t.json();
-    const files = (tree.tree || []).filter(x => x.type === "blob" && x.path !== "README.md");
-    let n = 0;
-    for(const f of files){
-      try{
-        const r = await ghApi("DELETE", "/repos/" + GH_REPO + "/contents/" + f.path, {
-          message: "wipe: حذف " + f.path, sha: f.sha
-        });
-        if(r.status === 200) n++;
-      }catch(e){}
-    }
-    console.log("🧹 ابری: " + n + "/" + files.length + " فایل حذف شد");
-    return { cloudDeleted: n, cloudTotal: files.length };
-  }catch(e){ return { cloudError: e.message }; }
-}
-
 let adminState = { users: {} };
 /* کاربر تازه: هر دو بخش قفل تا مدیر از پنل فعال کند */
 function adminDefaults(){ return { allowDup: false, allowConfirm: false }; }
@@ -1954,31 +1934,6 @@ app.post("/api/admin/user", (req, res) => {
 
 
 
-
-
-app.post("/api/admin/wipe", async (req, res) => {
-  try{
-    /* قطع همه سشن‌های واتساپ */
-    let disconnected = 0;
-    for(const [gid, u] of users.entries()){
-      try{ if(u.sock){ try{ u.sock.end(new Error("wipe")); }catch(e){} disconnected++; } }catch(e){}
-    }
-    users.clear();
-    pushedShaCache.clear();
-    lastBackupReqByUser.clear();
-    /* حذف بکاپ ابری */
-    const cloud = await wipeCloud();
-    /* حذف کامل دیتای محلی */
-    try{ fs.rmSync(DATA_ROOT, { recursive: true, force: true }); }catch(e){}
-    try{ fs.mkdirSync(DATA_ROOT, { recursive: true }); }catch(e){}
-    adminState = { users: {} };
-    loadAdmin();
-    console.log("🧹 دیتا صفر شد — " + disconnected + " سشن قطع شد");
-    res.json({ ok: true, disconnected, cloud, users: users.size });
-  }catch(e){
-    res.status(500).json({ ok: false, error: e.message });
-  }
-});
 
 /* احراز هویت سشن — همه APIها به جز auth نیاز به کوکی دارند */
 app.use("/api", (req, res, next) => {
@@ -2342,7 +2297,7 @@ setInterval(() => {
   server.listen(PORT, () => {
     console.log("");
     console.log("🌐 پنل وب: http://localhost:" + PORT);
-    console.log("🤖 نسخه چندکاربره v9.8.2 — ورود با گوگل");
+    console.log("🤖 نسخه چندکاربره v9.0.0 — ورود با گوگل");
     console.log("🔑 OAuth گوگل:", googleOAuthConfigured() ? "فعال" : "❌ تنظیم نشده");
     console.log("💾 حداکثر بات هم‌زمان:", MAX_CONCURRENT_BOTS);
     console.log("🎯 تشخیص تکراری سخت‌گیرانه (Strict)");
