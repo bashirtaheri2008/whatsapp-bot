@@ -1,5 +1,5 @@
 /* ==================================================
-   WhatsApp AI Bot — نسخه چندکاربره (Multi-Tenant) v9.0.0
+   WhatsApp AI Bot — نسخه چندکاربره (Multi-Tenant) v9.8.2
    هر کاربر با گوگل وارد می‌شود → حساب جدا → شماره واتساپ خودش
    دیتای هر کاربر (فیش/تنظیمات/نشست) کاملاً ایزوله است
    ================================================== */
@@ -2297,7 +2297,7 @@ setInterval(() => {
   server.listen(PORT, () => {
     console.log("");
     console.log("🌐 پنل وب: http://localhost:" + PORT);
-    console.log("🤖 نسخه چندکاربره v9.0.0 — ورود با گوگل");
+    console.log("🤖 نسخه چندکاربره v9.8.2 — ورود با گوگل");
     console.log("🔑 OAuth گوگل:", googleOAuthConfigured() ? "فعال" : "❌ تنظیم نشده");
     console.log("💾 حداکثر بات هم‌زمان:", MAX_CONCURRENT_BOTS);
     console.log("🎯 تشخیص تکراری سخت‌گیرانه (Strict)");
