@@ -1789,6 +1789,13 @@ app.get("/api/auth/google/callback", async (req, res) => {
     const u = ensureUser(gid, profile);
     u.loadLocal();
 
+    /* اتصال خودکار به واتساپ — چه نشست قدیمی داشته باشد چه اولین ورودش باشد */
+    if(!u.sock && !u.connecting){
+      if(activeBotCount() < MAX_CONCURRENT_BOTS || fs.existsSync(path.join(u.authDir, "creds.json"))){
+        u.connect().catch(e => console.error("اتصال کاربر پس از ورود:", e.message));
+      }
+    }
+
     const secure = (req.headers["x-forwarded-proto"] === "https") || !!process.env.RENDER_EXTERNAL_URL;
     setSessionCookie(res, gid, secure);
     res.redirect("/?auth=ok");

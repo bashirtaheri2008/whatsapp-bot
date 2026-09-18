@@ -713,6 +713,8 @@ function unlock(){
   $("lockScreen").classList.add("hidden");
   connectWS();
   setTimeout(() => { if(!gotState) startHttpFallback(); }, 6000);
+  /* اطمینان از شروع اتصال واتساپ — بی‌ضرر اگر از قبل وصل/در حال وصل باشد */
+  fetch("/api/connect", { method: "POST" }).catch(() => {});
   fetch("/api/receipts")
     .then(r => r.json())
     .then(data => {
