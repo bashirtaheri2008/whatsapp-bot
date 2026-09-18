@@ -801,6 +801,18 @@ function blobSha(file){
   return h.digest("hex");
 }
 
+const CRITICAL_BACKUP_FILES = ["receipts.json", "config.json", "confirm.json"];
+function isTriviallyEmpty(localFile){
+  try{
+    const s = fs.readFileSync(localFile, "utf8").trim();
+    if(!s) return true;
+    const j = JSON.parse(s);
+    if(Array.isArray(j)) return j.length === 0;
+    if(j && typeof j === "object") return Object.keys(j).length === 0;
+    return false;
+  }catch(e){ return false; }
+}
+
 async function ghPutFile(remotePath, localFile){
   let localSha;
   try{ localSha = blobSha(localFile); }catch(e){ return false; }
@@ -2161,8 +2173,15 @@ setInterval(() => {
 
     startCloudTasks();
 
-    restoreAllFromGithub().finally(() => {
-      ensureModels().catch(e => console.error("خطای اولیه مدل‌ها:", e.message));
-    });
+    restoreAllFromGithub().catch(e => console.error("خطای بازیابی:", e.message))
+      .finally(() => {
+        ensureModels().catch(e => console.error("خطای اولیه مدل‌ها:", e.message));
+      });
+    /* اگر بازیابی به‌خاطر لی‌میت گیت‌هاب ناقص ماند، بعد از رفع خودکار دوباره می‌کند */
+    if(cloudEnabled() && ghRateLimited()){
+      const retryMs = Math.max(ghPausedUntil - Date.now(), 0) + 10000;
+      console.warn("⏳ بازیابی ناقص (لی‌میت گیت‌هاب) — تلاش مجدد تا " + Math.round(retryMs / 60000) + " دقیقه دیگر");
+      setTimeout(() => { restoreAllFromGithub().catch(e => console.error("خطای بازیابی مجدد:", e.message)); }, retryMs);
+    }
   });
 })();
