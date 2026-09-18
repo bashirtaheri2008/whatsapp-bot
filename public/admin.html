@@ -224,10 +224,13 @@ async function refresh(){
 }
 
 function stateChip(u){
-  if(u.overrides.blocked) return '<span class="chip off">⛔ مسدود</span>';
-  if(u.overrides.botEnabled === false) return '<span class="chip off">🤖 ربات غیرفعال (مدیریت)</span>';
-  if(u.connected) return '<span class="chip on">🟢 متصل</span>';
-  return '<span class="chip dim">⚪ قطع</span>';
+  const chips = [];
+  if(u.overrides.blocked) chips.push('<span class="chip off">⛔ مسدود</span>');
+  chips.push(u.overrides.allowDup === false ? '<span class="chip off">📋 فیش تکراری: قفل</span>' : '<span class="chip on">📋 فیش تکراری</span>');
+  chips.push(u.overrides.allowConfirm === false ? '<span class="chip off">✅ تأیید: قفل</span>' : '<span class="chip on">✅ تأیید</span>');
+  if(u.overrides.forceConfirm) chips.push('<span class="chip" style="background:var(--warning-soft);color:var(--warning)">🔒 تأیید اجباری</span>');
+  chips.push(u.connected ? '<span class="chip on">🟢 متصل</span>' : '<span class="chip dim">⚪ قطع</span>');
+  return chips.join(" ");
 }
 
 function sw(id, label, desc, val, cls){
@@ -251,17 +254,14 @@ function renderUsers(list){
       + '<div class="who"><div class="name">' + esc(u.name || "بی‌نام") + '</div><div class="mail">' + esc(u.email || "") + '</div>'
       + stateChip(u)
       + (u.botNumber ? '<span class="chip">📱 ' + esc(u.botNumber) + '</span>' : "")
-      + (u.confirmEnabled ? '<span class="chip on">تأیید: روشن</span>' : "")
-      + (ov.forceConfirm ? '<span class="chip" style="background:var(--warning-soft);color:var(--warning)">تأیید اجباری</span>' : "")
       + '</div>'
       + '<div class="meta">فیش: ' + fa(u.receipts) + '<br>گروه هدف: ' + fa(u.targetGroups) + '<br>آخرین ورود: ' + seen + '</div>'
       + '</div>'
       + '<div class="ctrls">'
-      + sw("sw-bot-" + u.gid, "🤖 ربات فعال", "خاموش = اتصال واتساپ مسدود", ov.botEnabled !== false)
-      + sw("sw-grp-" + u.gid, "👥 تنظیم گروه‌ها", "اجازه تغییر گروه‌ها و شماره‌ها", ov.allowGroupsEdit !== false)
-      + sw("sw-conf-" + u.gid, "✅ جریان تأیید", "اجازه استفاده از فیش به تأییدکننده", ov.allowConfirm !== false)
+      + sw("sw-dup-" + u.gid, "📋 بخش فیش تکراری", "اسکن گروه‌ها و تشخیص فیش تکراری", ov.allowDup !== false)
+      + sw("sw-conf-" + u.gid, "✅ بخش فیش به تأیید", "ارسال فیش‌ها به تأییدکننده", ov.allowConfirm !== false)
       + sw("sw-force-" + u.gid, "🔒 تأیید اجباری", "کاربر نمی‌تواند تأیید را خاموش کند", ov.forceConfirm, "warn")
-      + sw("sw-block-" + u.gid, "⛔ مسدودسازی", "دسترسی کامل کاربر قطع می‌شود", ov.blocked, "danger")
+      + sw("sw-block-" + u.gid, "⛔ مسدودسازی کامل", "قطع پنل + خروج واتساپ (فقط این مورد واتساپ را قطع می‌کند)", ov.blocked, "danger")
       + '</div>'
       + '<div class="note-wrap"><textarea id="note-' + u.gid + '" placeholder="یادداشت مدیریت (اختیاری)">' + esc(ov.note || "") + '</textarea></div>'
       + '<div class="cfoot">'
@@ -284,8 +284,7 @@ function renderDeleted(list){
 async function saveUser(gid){
   const body = {
     gid,
-    botEnabled: document.getElementById("sw-bot-" + gid).checked,
-    allowGroupsEdit: document.getElementById("sw-grp-" + gid).checked,
+    allowDup: document.getElementById("sw-dup-" + gid).checked,
     allowConfirm: document.getElementById("sw-conf-" + gid).checked,
     forceConfirm: document.getElementById("sw-force-" + gid).checked,
     blocked: document.getElementById("sw-block-" + gid).checked,
@@ -293,7 +292,7 @@ async function saveUser(gid){
   };
   try{
     const d = await api("user", body);
-    if(d.ok) toast("✅ تنظیمات ذخیره شد");
+    if(d.ok) toast("✅ ذخیره شد — اتصال واتساپ کاربر قطع نشد");
     else toast(d.error || "خطا", true);
     await refresh();
   }catch(e){}
@@ -319,7 +318,7 @@ async function restoreUser(gid){
 
 document.addEventListener("focusin", e => {
   const m = e.target.id && e.target.id.match(/^sw-|^note-/);
-  if(m) editingGid = e.target.id.replace(/^sw-(bot|grp|conf|force|block)-/, "").replace(/^note-/, "");
+  if(m) editingGid = e.target.id.replace(/^sw-(dup|conf|force|block)-/, "").replace(/^note-/, "");
 });
 document.addEventListener("focusout", () => { setTimeout(() => { if(!document.activeElement || !document.activeElement.id || !document.activeElement.id.match(/^sw-|^note-/)) editingGid = null; }, 100); });
 

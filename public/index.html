@@ -113,6 +113,14 @@ button,input{font-family:inherit}
 
 .panel::-webkit-scrollbar,.group-list::-webkit-scrollbar,.receipt-list::-webkit-scrollbar{width:5px}
 .panel::-webkit-scrollbar-thumb,.group-list::-webkit-scrollbar-thumb,.receipt-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+/* ─── قفل بخش‌ها توسط مدیریت ─── */
+.sec-lock{position:absolute;inset:0;z-index:30;display:none;align-items:center;justify-content:center;background:rgba(10,15,13,.9);backdrop-filter:blur(5px)}
+.sec-lock.show{display:flex}
+.sec-lock .box{max-width:300px;text-align:center;padding:24px}
+.sec-lock .ic{font-size:42px;margin-bottom:12px}
+.sec-lock .tt{font-weight:800;font-size:15.5px;margin-bottom:8px}
+.sec-lock .dd{font-size:12.5px;color:var(--text-dim);line-height:2}
+.sec-lock .dd b{color:var(--warning)}
 
 .section-title{
   display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700;
@@ -636,7 +644,8 @@ let state = {
   confirm: { enabled: false, ownerJid: null, ownerName: "", sourceGroups: [], pending: 0, queue: [], contacts: [] },
   models: { text: null, vision: null },
   keys: [],
-  queue: { pending: 0, busy: false }
+  queue: { pending: 0, busy: false },
+  permissions: { dup: true, confirm: true, blocked: false, forceConfirm: false }
 };
 let receiptsData = [];
 let lastConnectionState = null;
@@ -772,6 +781,7 @@ function startHttpFallback(){
       state.groups = d.groups || []; state.config = d.config || state.config;
       state.models = d.models || state.models; state.keys = d.keys || state.keys;
       state.queue = d.queue || state.queue;
+      state.permissions = d.permissions || state.permissions;
       try{
         const c = await _rawFetch("/api/confirm");
         if(c.ok){ state.confirm = (await c.json()) || state.confirm; }
@@ -811,6 +821,7 @@ function connectWS(){
         state.confirm = data.confirm || state.confirm;
         state.models = data.models || state.models;
         state.keys = data.keys || state.keys;
+        state.permissions = data.permissions || state.permissions;
         render();
       }
       if(data.type === "receipts"){
@@ -858,6 +869,40 @@ function render(){
     renderOnboarding(cs);
   }
   lastConnectionState = cs;
+  applyLocks();
+}
+
+/* ─── قفل بخش‌ها (کنترل مدیریت) ─── */
+const LOCKS = [
+  ["panel-dup", "بخش فیش تکراری"],
+  ["panel-confirm", "بخش فیش به تأیید"]
+];
+function ensureLocks(){
+  LOCKS.forEach(([id, title]) => {
+    const el = $(id);
+    if(!el || el.querySelector(".sec-lock")) return;
+    const l = document.createElement("div");
+    l.className = "sec-lock";
+    l.innerHTML = '<div class="box"><div class="ic">🔒</div><div class="tt">' + title + ' برای شما فعال نیست</div>' +
+      '<div class="dd">این بخش توسط <b>مدیریت</b> برای حساب شما غیرفعال شده است.<br>برای فعال‌سازی با مدیریت در تماس باشید.</div></div>';
+    el.appendChild(l);
+  });
+}
+function applyLocks(){
+  const pm = state.permissions || {};
+  ensureLocks();
+  [["panel-dup", "dup", "dup"], ["panel-confirm", "confirm", "confirm"]].forEach(([id, key, tab]) => {
+    const el = $(id);
+    if(!el) return;
+    const locked = pm[key] === false;
+    const l = el.querySelector(".sec-lock");
+    if(l) l.classList.toggle("show", locked && unlocked);
+    const btn = document.querySelector('.navbtn[data-tab="' + tab + '"]');
+    if(btn){
+      btn.style.opacity = locked ? ".45" : "";
+      btn.title = locked ? "این بخش برای شما فعال نیست" : "";
+    }
+  });
 }
 
 function renderOnboarding(cs){
@@ -1093,10 +1138,12 @@ function renderConfirm(){
 $("confirmToggle").addEventListener("click", async () => {
   const r = await apiPost("/api/confirm/toggle", { enabled: !state.confirm.enabled });
   if(r.ok) toast(state.confirm.enabled ? "ارسال به تأیید کننده خاموش شد" : "ارسال به تأیید کننده روشن شد");
+  else if(r.error) toast("🔒 " + r.error);
 });
 $("confirmDashToggle").addEventListener("click", async () => {
   const r = await apiPost("/api/confirm/toggle", { enabled: !state.confirm.enabled });
   if(r.ok) toast(state.confirm.enabled ? "ارسال به تأیید کننده خاموش شد" : "ارسال به تأیید کننده روشن شد");
+  else if(r.error) toast("🔒 " + r.error);
 });
 
 $("confirmClearGroups").addEventListener("click", async () => {

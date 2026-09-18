@@ -985,7 +985,8 @@ const ADMIN_FILE = path.join(DATA_ROOT, "admin.json");
 const adminState = { users: {}, deleted: [] };
 
 function defaultOverrides(){
-  return { blocked:false, botEnabled:true, allowGroupsEdit:true, allowConfirm:true, forceConfirm:false, note:"" };
+  /* دو بخش اصلی ربات: فیش تکراری (dup) و فیش به تأیید (confirm) */
+  return { blocked:false, allowDup:true, allowConfirm:true, forceConfirm:false, note:"" };
 }
 function adminOverrides(gid){ return Object.assign(defaultOverrides(), adminState.users[gid] || {}); }
 
@@ -1377,13 +1378,15 @@ class UserBot {
   }
 
   statePayload(){
+    const ovP = adminOverrides(this.gid);
     return {
       type: "state",
       state: this.connectionState, qr: this.currentQR, qrImage: this.currentQRImage, botNumber: this.botNumber,
       groups: this.groupsCache, config: this.runtimeConfig,
       confirm: this.confirmPublic(),
       models: { text: TEXT_MODEL, vision: VISION_MODEL },
-      keys: keyManager.power()
+      keys: keyManager.power(),
+      permissions: { dup: ovP.allowDup, confirm: ovP.allowConfirm, blocked: ovP.blocked, forceConfirm: ovP.forceConfirm }
     };
   }
 
@@ -1395,7 +1398,7 @@ class UserBot {
   async connect(){
     if(this.connecting || this.sock) return;
     const ovA = adminOverrides(this.gid);
-    if(ovA.blocked || ovA.botEnabled === false){
+    if(ovA.blocked){
       this.connectionState = "blocked";
       this.broadcastState();
       throw new Error("ربات برای این حساب توسط مدیریت غیرفعال شده است");
@@ -1625,6 +1628,7 @@ class UserBot {
   }
 
   async processReceiptTask(msg, msgType, senderNumber){
+    if(!adminOverrides(this.gid).allowDup) return; /* بخش توسط مدیریت غیرفعال است — واتساپ قطع نمی‌شود */
     try{
       await this.sendReaction(msg, REACTION_PROCESSING);
 
@@ -1698,6 +1702,7 @@ class UserBot {
   }
 
   async processConfirmTask(msg, msgType){
+    if(!adminOverrides(this.gid).allowConfirm) return; /* بخش توسط مدیریت غیرفعال است */
     try{
       const senderJid = msg.key.participant || msg.key.remoteJid;
       const senderNum = senderJid.split("@")[0].split(":")[0];
@@ -1920,7 +1925,9 @@ app.post("/api/auth/logout", (req, res) => {
 
 app.get("/api/status", (req, res) => {
   const u = req.user;
+  const ovS = adminOverrides(u.gid);
   res.json({
+    permissions: { dup: ovS.allowDup, confirm: ovS.allowConfirm, blocked: ovS.blocked, forceConfirm: ovS.forceConfirm },
     state: u.connectionState, qr: u.currentQR, qrImage: u.currentQRImage, botNumber: u.botNumber,
     groups: u.groupsCache, config: u.runtimeConfig,
     models: { text: TEXT_MODEL, vision: VISION_MODEL },
@@ -1958,7 +1965,7 @@ app.delete("/api/receipts", (req, res) => {
 
 app.post("/api/select-group", (req, res) => {
   const u = req.user;
-  if(!adminOverrides(u.gid).allowGroupsEdit) return res.status(403).json({ ok: false, error: "تنظیمات گروه‌ها توسط مدیریت قفل شده است" });
+  if(!adminOverrides(u.gid).allowDup) return res.status(403).json({ ok: false, error: "بخش فیش تکراری برای شما فعال نیست" });
   const { jid, name } = req.body;
   if(!jid) return res.json({ ok: false, error: "jid لازم است" });
   const idx = u.runtimeConfig.targetGroups.findIndex(t => t.jid === jid);
@@ -1974,14 +1981,14 @@ app.post("/api/select-group", (req, res) => {
 
 app.post("/api/clear-group", (req, res) => {
   const u = req.user;
-  if(!adminOverrides(u.gid).allowGroupsEdit) return res.status(403).json({ ok: false, error: "تنظیمات گروه‌ها توسط مدیریت قفل شده است" });
+  if(!adminOverrides(u.gid).allowDup) return res.status(403).json({ ok: false, error: "بخش فیش تکراری برای شما فعال نیست" });
   u.runtimeConfig.targetGroups = [];
   u.saveConfig(); u.broadcastState();
   res.json({ ok: true });
 
 app.post("/api/select-all-groups", (req, res) => {
   const u = req.user;
-  if(!adminOverrides(u.gid).allowGroupsEdit) return res.status(403).json({ ok: false, error: "تنظیمات گروه‌ها توسط مدیریت قفل شده است" });
+  if(!adminOverrides(u.gid).allowDup) return res.status(403).json({ ok: false, error: "بخش فیش تکراری برای شما فعال نیست" });
   u.runtimeConfig.targetGroups = (u.groupsCache || []).map(g => ({ jid: g.jid, name: g.name || "" }));
   u.saveConfig(); u.broadcastState();
   res.json({ ok: true, count: u.runtimeConfig.targetGroups.length });
@@ -1990,7 +1997,7 @@ app.post("/api/select-all-groups", (req, res) => {
 
 app.post("/api/allowed-numbers", (req, res) => {
   const u = req.user;
-  if(!adminOverrides(u.gid).allowGroupsEdit) return res.status(403).json({ ok: false, error: "تنظیمات گروه‌ها توسط مدیریت قفل شده است" });
+  if(!adminOverrides(u.gid).allowDup) return res.status(403).json({ ok: false, error: "بخش فیش تکراری برای شما فعال نیست" });
   u.runtimeConfig.allowedNumbers = (req.body.numbers || []).filter(n => /^\d+$/.test(n));
   u.saveConfig(); u.broadcastState();
   res.json({ ok: true });
@@ -1998,6 +2005,7 @@ app.post("/api/allowed-numbers", (req, res) => {
 
 app.post("/api/toggle", (req, res) => {
   const u = req.user;
+  if(!adminOverrides(u.gid).allowDup) return res.status(403).json({ ok: false, error: "بخش فیش تکراری برای شما فعال نیست" });
   u.runtimeConfig.enabled = !!req.body.enabled;
   u.saveConfig(); u.broadcastState();
   res.json({ ok: true });
@@ -2005,7 +2013,7 @@ app.post("/api/toggle", (req, res) => {
 
 app.post("/api/refresh-groups", async (req, res) => {
   const u = req.user;
-  if(!adminOverrides(u.gid).allowGroupsEdit) return res.status(403).json({ ok: false, error: "تنظیمات گروه‌ها توسط مدیریت قفل شده است" });
+  if(!adminOverrides(u.gid).allowDup) return res.status(403).json({ ok: false, error: "بخش فیش تکراری برای شما فعال نیست" });
   try{ await u.fetchGroups(); res.json({ ok: true, groups: u.groupsCache }); }
   catch(e){ res.json({ ok: false, error: e.message }); }
 });
@@ -2016,7 +2024,7 @@ app.get("/api/confirm", (req, res) => res.json(req.user.confirmPublic()));
 
 app.post("/api/confirm/toggle", (req, res) => {
   const u = req.user;
-  if(!adminOverrides(u.gid).allowConfirm) return res.status(403).json({ ok: false, error: "جریان تأیید توسط مدیریت غیرفعال شده است" });
+  if(!adminOverrides(u.gid).allowConfirm) return res.status(403).json({ ok: false, error: "بخش فیش به تأیید برای شما فعال نیست" });
   if(!req.body.enabled && adminOverrides(u.gid).forceConfirm) return res.json({ ok: false, error: "جریان تأیید توسط مدیریت اجباری شده و خاموش کردن آن ممکن نیست" });
   u.confirmCfg.enabled = !!req.body.enabled;
   u.saveConfirm(); u.broadcastState();
@@ -2025,7 +2033,7 @@ app.post("/api/confirm/toggle", (req, res) => {
 
 app.post("/api/confirm/owner", (req, res) => {
   const u = req.user;
-  if(!adminOverrides(u.gid).allowConfirm) return res.status(403).json({ ok: false, error: "جریان تأیید توسط مدیریت غیرفعال شده است" });
+  if(!adminOverrides(u.gid).allowConfirm) return res.status(403).json({ ok: false, error: "بخش فیش به تأیید برای شما فعال نیست" });
   const { jid, name } = req.body;
   if(!jid || !jid.endsWith("@s.whatsapp.net")) return res.json({ ok: false, error: "شماره معتبر نیست" });
   u.confirmCfg.ownerJid = jid;
@@ -2036,7 +2044,7 @@ app.post("/api/confirm/owner", (req, res) => {
 
 app.post("/api/confirm/owner-clear", (req, res) => {
   const u = req.user;
-  if(!adminOverrides(u.gid).allowConfirm) return res.status(403).json({ ok: false, error: "جریان تأیید توسط مدیریت غیرفعال شده است" });
+  if(!adminOverrides(u.gid).allowConfirm) return res.status(403).json({ ok: false, error: "بخش فیش به تأیید برای شما فعال نیست" });
   u.confirmCfg.ownerJid = null;
   u.confirmCfg.ownerName = "";
   u.saveConfirm(); u.broadcastState();
@@ -2045,7 +2053,7 @@ app.post("/api/confirm/owner-clear", (req, res) => {
 
 app.post("/api/confirm/select-group", (req, res) => {
   const u = req.user;
-  if(!adminOverrides(u.gid).allowConfirm) return res.status(403).json({ ok: false, error: "جریان تأیید توسط مدیریت غیرفعال شده است" });
+  if(!adminOverrides(u.gid).allowConfirm) return res.status(403).json({ ok: false, error: "بخش فیش به تأیید برای شما فعال نیست" });
   const { jid, name } = req.body;
   if(!jid) return res.json({ ok: false, error: "jid لازم است" });
   const idx = u.confirmCfg.sourceGroups.findIndex(g => g.jid === jid);
@@ -2057,7 +2065,7 @@ app.post("/api/confirm/select-group", (req, res) => {
 
 app.post("/api/confirm/clear-groups", (req, res) => {
   const u = req.user;
-  if(!adminOverrides(u.gid).allowConfirm) return res.status(403).json({ ok: false, error: "جریان تأیید توسط مدیریت غیرفعال شده است" });
+  if(!adminOverrides(u.gid).allowConfirm) return res.status(403).json({ ok: false, error: "بخش فیش به تأیید برای شما فعال نیست" });
   u.confirmCfg.sourceGroups = [];
   u.saveConfirm(); u.broadcastState();
   res.json({ ok: true });
@@ -2065,7 +2073,7 @@ app.post("/api/confirm/clear-groups", (req, res) => {
 
 app.post("/api/confirm/select-all-groups", (req, res) => {
   const u = req.user;
-  if(!adminOverrides(u.gid).allowConfirm) return res.status(403).json({ ok: false, error: "جریان تأیید توسط مدیریت غیرفعال شده است" });
+  if(!adminOverrides(u.gid).allowConfirm) return res.status(403).json({ ok: false, error: "بخش فیش به تأیید برای شما فعال نیست" });
   u.confirmCfg.sourceGroups = (u.groupsCache || []).map(g => ({ jid: g.jid, name: g.name || "" }));
   u.saveConfirm(); u.broadcastState();
   res.json({ ok: true, count: u.confirmCfg.sourceGroups.length });
@@ -2073,7 +2081,7 @@ app.post("/api/confirm/select-all-groups", (req, res) => {
 
 app.post("/api/confirm/add-contact", (req, res) => {
   const u = req.user;
-  if(!adminOverrides(u.gid).allowConfirm) return res.status(403).json({ ok: false, error: "جریان تأیید توسط مدیریت غیرفعال شده است" });
+  if(!adminOverrides(u.gid).allowConfirm) return res.status(403).json({ ok: false, error: "بخش فیش به تأیید برای شما فعال نیست" });
   let num = String(req.body.number || "").replace(/\D/g, "");
   if(!num) return res.json({ ok: false, error: "شماره لازم است" });
   if(num.startsWith("00")) num = num.slice(2);
@@ -2151,8 +2159,7 @@ app.post("/api/admin/user", async (req, res) => {
   const cur = adminOverrides(gid);
   const ov = {
     blocked: req.body.blocked === undefined ? cur.blocked : !!req.body.blocked,
-    botEnabled: req.body.botEnabled === undefined ? cur.botEnabled : !!req.body.botEnabled,
-    allowGroupsEdit: req.body.allowGroupsEdit === undefined ? cur.allowGroupsEdit : !!req.body.allowGroupsEdit,
+    allowDup: req.body.allowDup === undefined ? cur.allowDup : !!req.body.allowDup,
     allowConfirm: req.body.allowConfirm === undefined ? cur.allowConfirm : !!req.body.allowConfirm,
     forceConfirm: req.body.forceConfirm === undefined ? cur.forceConfirm : !!req.body.forceConfirm,
     note: String(req.body.note === undefined ? cur.note : req.body.note).slice(0, 300)
@@ -2164,7 +2171,9 @@ app.post("/api/admin/user", async (req, res) => {
     try{ u.saveConfirm(); }catch(e){}
     u.broadcastState();
   }
-  if(u && (ov.blocked || !ov.botEnabled) && u.sock){
+  if(u && ov.forceConfirm && ov.allowConfirm && u.confirmCfg) u.broadcastState();
+  /* قطع واتساپ فقط هنگام مسدودسازی کامل — تغییر بخش‌ها اتصال را قطع نمی‌کند */
+  if(u && ov.blocked && u.sock){
     try{ await u.waLogout(); }catch(e){ console.error("admin disconnect:", e.message); }
   }
   saveAdmin();
