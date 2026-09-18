@@ -1,7 +1,7 @@
 {
   "name": "wa-bot",
-  "version": "9.0.0",
-  "description": "WhatsApp AI Bot - multi-user with Google login",
+  "version": "8.2.4",
+  "description": "WhatsApp AI Bot - receipt checker (cloud)",
   "main": "bot.js",
   "scripts": {
     "start": "node bot.js"
