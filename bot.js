@@ -994,6 +994,8 @@ async function restoreAllFromGithub(){
       try{
         const gid = item.gid;
         if(!gid || !/^[A-Za-z0-9_\-]{5,}$/.test(gid)) continue;
+        /* v9.8.3: کاربران موجود ثبت/قفل می‌شوند تا سیاست سراسری جدید اثری بر آن‌ها نداشته باشد */
+        if(!adminState.users[gid]) adminState.users[gid] = adminDefaults();
         const u = ensureUser(gid, { email: item.email || "" }, true); /* deferSave: پروفایل خالی نوشته نشود */
         if(!fs.existsSync(u.metaFile)){
           const okMeta = await ghGetFile("users/" + gid + "/meta.json", u.metaFile);
@@ -1028,6 +1030,7 @@ async function restoreAllFromGithub(){
         console.error("restore user:", e.message);
       }
     }
+    saveAdmin(); /* v9.8.3: ثبت یکجای کاربران بازیابی‌شده در admin.json */
     console.log("☁️ بازیابی از گیت‌هاب کامل شد");
   }catch(e){
     console.error("restore:", e.message);
@@ -1193,6 +1196,12 @@ function ensureUser(gid, profile, deferSave){
   u = new UserBot(gid, profile || {});
   users.set(gid, u);
   u.meta.lastSeen = Date.now();
+  /* v9.8.3: کاربر تازه‌وارد سیاست لحظه ثبت را به عنوان وضعیت اختصاصی خودش می‌گیرد؛
+     تغییرهای بعدی سیاست سراسری فقط بر کاربرانِ آینده اثر می‌گذارد */
+  if(!adminState.users[gid]){
+    adminState.users[gid] = adminDefaults();
+    saveAdmin();
+  }
   if(deferSave){
     /* v9.8.1: ذخیره به تعویق — تا پروفایل واقعی از بکاپ ابری بازیابی نشده،
        هیچ فایل خالی روی دیسک نوشته نمی‌شود تا جایگزین نسخه اصلی نشود */
@@ -1238,7 +1247,7 @@ class UserBot {
     this.runtimeConfig = { targetGroups: [], allowedNumbers: [], enabled: true };
     this.receipts = { list: [] };
     this.confirmCfg = {
-      enabled: false,
+      enabled: true, /* v9.8.3: فعال‌سازی واقعی = اجازه مدیر؛ کاربران قبلی با وضعیت ذخیره‌شده خودشان می‌مانند */
       ownerJid: null,
       ownerName: "",
       sourceGroups: [],
@@ -1854,9 +1863,13 @@ app.use(express.static(path.join(__dirname, "public")));
    ================================================== */
 const ADMIN_KEY = process.env.ADMIN_KEY || "hamgap-admin-2026";
 const ADMIN_FILE = path.join(DATA_ROOT, "admin.json");
-let adminState = { users: {} };
+let adminState = { users: {}, defaults: { allowDup: false, allowConfirm: false } };
 /* کاربر تازه: هر دو بخش قفل تا مدیر از پنل فعال کند */
-function adminDefaults(){ return { allowDup: false, allowConfirm: false }; }
+/* v9.8.3: سیاست پیش‌فرض کاربران جدید — از پنل ادمین قابل تنظیم است */
+function adminDefaults(){
+  const d = adminState.defaults || {};
+  return { allowDup: !!d.allowDup, allowConfirm: !!d.allowConfirm };
+}
 function adminOverrides(gid){
   return Object.assign(adminDefaults(), (adminState.users && adminState.users[gid]) || {});
 }
@@ -1865,6 +1878,10 @@ function loadAdmin(){
     if(fs.existsSync(ADMIN_FILE)){
       const d = JSON.parse(fs.readFileSync(ADMIN_FILE, "utf8"));
       adminState = { users: (d && d.users) || {} };
+      const df = d && d.defaults;
+      adminState.defaults = (df && typeof df.allowDup === "boolean" && typeof df.allowConfirm === "boolean")
+        ? { allowDup: df.allowDup, allowConfirm: df.allowConfirm }
+        : { allowDup: false, allowConfirm: false };
     }
   }catch(e){ console.error("loadAdmin:", e.message); }
 }
@@ -1913,7 +1930,17 @@ app.get("/api/admin/users", (req, res) => {
     });
   }
   list.sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0));
-  res.json({ ok: true, users: list, total: list.length, connected, receiptsTotal });
+  res.json({ ok: true, users: list, total: list.length, connected, receiptsTotal, defaults: adminDefaults() });
+});
+app.post("/api/admin/defaults", (req, res) => {
+  const cur = adminDefaults();
+  adminState.defaults = {
+    allowDup: req.body.allowDup === undefined ? cur.allowDup : !!req.body.allowDup,
+    allowConfirm: req.body.allowConfirm === undefined ? cur.allowConfirm : !!req.body.allowConfirm
+  };
+  saveAdmin();
+  console.log("⚙️ سیاست کاربران جدید: فیش تکراری=" + (adminState.defaults.allowDup ? "خودکار فعال" : "قفل") + " | فیش تأیید=" + (adminState.defaults.allowConfirm ? "خودکار فعال" : "قفل"));
+  res.json({ ok: true, defaults: adminState.defaults });
 });
 app.post("/api/admin/user", (req, res) => {
   const gid = String(req.body.gid || "");
