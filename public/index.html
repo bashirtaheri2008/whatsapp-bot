@@ -73,6 +73,9 @@ button,input{font-family:inherit}
   background:linear-gradient(150deg,var(--accent),var(--accent-dim));
   display:flex;align-items:center;justify-content:center;color:var(--accent-ink);
 }
+.brandmark img{display:none;width:100%;height:100%;border-radius:11px;object-fit:cover}
+.brandmark.has-avatar .icon{display:none}
+.brandmark.has-avatar img{display:block}
 .brandmark .pulse-dot{
   position:absolute;bottom:-2px;left:-2px;width:11px;height:11px;border-radius:50%;
   background:var(--accent);border:2px solid var(--bg-1);display:none;
@@ -414,10 +417,11 @@ button,input{font-family:inherit}
   <header class="app-header">
     <div class="brandmark">
       <span class="icon" style="width:18px;height:18px"></span>
+      <img id="userAvatar" alt="" referrerpolicy="no-referrer">
       <span class="pulse-dot" id="headerPulse"></span>
     </div>
     <div class="header-titles">
-      <h1>پنل ربات واتساپ</h1>
+      <h1 id="headerTitle">پنل ربات واتساپ</h1>
       <div class="sub" id="botNumberLabel">—</div>
     </div>
     <div class="status-pill ok" id="statusBadge"><span class="dot"></span><span>متصل</span></div>
@@ -428,13 +432,44 @@ button,input{font-family:inherit}
     <!-- ---------- DASHBOARD ---------- -->
     <section class="panel active" id="panel-dashboard">
 
-      <div class="card active-group-card">
+      <div class="card">
         <div class="card-head">
-          <div class="ico-badge" data-lucide="target"></div>
-          <h2>گروه‌های فعال</h2>
-          <button class="btn btn-secondary btn-sm" id="goToGroups">مدیریت</button>
+          <div class="ico-badge" data-lucide="layout-grid"></div>
+          <h2>قابلیت‌های ربات</h2>
         </div>
-        <div id="selectedGroupBox"></div>
+        <div class="toggle-row">
+          <div class="toggle-label">
+            <b style="font-size:14.5px">۱. تشخیص فیش تکراری</b>
+            <span class="sub" id="dupStatus">فیش گروه‌ها بررسی و تکراری‌ها علامت می‌خورند</span>
+          </div>
+          <div class="toggle-switch" id="dupToggle"></div>
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-label">
+            <b style="font-size:14.5px">۲. ارسال فیش به تأیید کننده</b>
+            <span class="sub" id="confirmStatus">فیش‌ها برای تأیید نزد تأیید کننده می‌روند و ری‌اکشنش برمی‌گردد</span>
+          </div>
+          <div class="toggle-switch" id="confirmDashToggle"></div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ---------- DUPLICATE (تشخیص فیش تکراری) ---------- -->
+    <section class="panel" id="panel-dup">
+
+      <div class="section-title"><span>تشخیص فیش تکراری در گروه‌ها</span></div>
+
+      <div class="card">
+        <div class="card-head">
+          <div class="ico-badge" data-lucide="copy"></div>
+          <h2>این بخش چه می‌کند؟</h2>
+        </div>
+        <div class="confirm-flow">
+          <div class="cf-step"><span class="icon" data-lucide="scan-line"></span>فیش‌های گروه‌ها با هوش مصنوعی بررسی می‌شود</div>
+          <div class="cf-step"><span class="icon" data-lucide="copy"></span>فیش تکراری → جواب خودکار «ارسال شده»</div>
+          <div class="cf-step"><span class="icon" data-lucide="image-off"></span>عکس غیر بانکی → نادیده گرفته می‌شود</div>
+        </div>
       </div>
 
       <div class="card">
@@ -452,73 +487,72 @@ button,input{font-family:inherit}
 
       <div class="card">
         <div class="card-head">
-          <div class="ico-badge" data-lucide="power"></div>
-          <h2>وضعیت ربات</h2>
+          <div class="ico-badge" data-lucide="users"></div>
+          <h2>گروه‌های تحت نظر</h2>
+          <button class="btn btn-secondary btn-sm" id="refreshGroups"><span class="icon" data-lucide="refresh-cw" style="width:14px;height:14px"></span>بروزرسانی</button>
+          <button class="btn btn-secondary btn-sm" id="selectAllGroups">انتخاب همه</button>
         </div>
-        <div class="toggle-row">
-          <div class="toggle-label">ربات فعال باشد<span class="sub">پاسخ‌گویی خودکار به پیام‌ها</span></div>
-          <div class="toggle-switch" id="botToggle"></div>
-        </div>
-        <div class="toggle-row">
-          <div class="toggle-label">صف پردازش<span class="sub" id="queueSize">۰ مورد در انتظار</span></div>
-          <div class="status-pill" id="queueBadge">آماده</div>
-        </div>
-      </div>
-
-    </section>
-
-    <!-- ---------- GROUPS ---------- -->
-    <section class="panel" id="panel-groups">
-      <div class="section-title">
-        <span>انتخاب گروه‌ها</span>
-        <span class="spacer"></span>
-        <button class="btn btn-secondary btn-sm" id="refreshGroups"><span class="icon" data-lucide="refresh-cw" style="width:14px;height:14px"></span>بروزرسانی</button>
-      </div>
-      <div class="card" style="padding:10px">
+        <div id="selectedGroupBox"></div>
+        <div class="hint-line">روی هر گروه بزن تا روشن/خاموش شود — هیچ انتخابی = همه گروه‌ها</div>
         <div class="group-list" id="groupList"></div>
       </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div class="ico-badge" data-lucide="receipt"></div>
+          <h2>فیش‌های ثبت‌شده</h2>
+          <span class="badge-count" id="receiptsCount">۰</span>
+          <span class="spacer"></span>
+          <button class="btn btn-icon" id="refreshReceipts"><span class="icon" data-lucide="refresh-cw"></span></button>
+          <button class="btn btn-danger btn-sm" id="clearAllReceipts"><span class="icon" data-lucide="trash-2" style="width:14px;height:14px"></span>پاک‌سازی</button>
+        </div>
+        <div class="receipt-list" id="receiptsList"></div>
+      </div>
+
     </section>
 
-    <!-- ---------- CONFIRM (واسطه تایید فیش) ---------- -->
+    <!-- ---------- CONFIRM (ارسال فیش به تأیید کننده) ---------- -->
     <section class="panel" id="panel-confirm">
+
+      <div class="section-title"><span>ارسال فیش به تأیید کننده و ری‌اکشن</span></div>
 
       <div class="card">
         <div class="card-head">
           <div class="ico-badge" data-lucide="target"></div>
-          <h2>واسطه تأیید فیش</h2>
+          <h2>ارسال فیش به تأیید کننده</h2>
         </div>
         <div class="toggle-row">
-          <div class="toggle-label">ویژگی فعال باشد<span class="sub">فیش گروه‌ها به صاحب کارت فوروارد می‌شود و ری‌اکشن او در گروه نمایش داده می‌شود</span></div>
+          <div class="toggle-label">ویژگی فعال باشد<span class="sub">فیش گروه‌ها به تأیید کننده فوروارد می‌شود و ری‌اکشن او در گروه نمایش داده می‌شود</span></div>
           <div class="toggle-switch" id="confirmToggle"></div>
         </div>
         <div class="confirm-flow">
           <div class="cf-step"><span class="icon" data-lucide="scan-line"></span>کاربر فیش می‌فرستد — ربات اسکن می‌کند</div>
-          <div class="cf-step"><span class="icon" data-lucide="send-horizontal"></span>فیش فوروارد می‌شود به صاحب کارت — در انتظار</div>
-          <div class="cf-step"><span class="icon" data-lucide="circle-check"></span>ری‌اکشن صاحب کارت روی پیام گروه اعمال می‌شود</div>
+          <div class="cf-step"><span class="icon" data-lucide="send-horizontal"></span>فیش فوروارد می‌شود به تأیید کننده — در انتظار</div>
+          <div class="cf-step"><span class="icon" data-lucide="circle-check"></span>ری‌اکشن تأیید کننده روی پیام گروه اعمال می‌شود</div>
         </div>
       </div>
 
       <div class="card">
         <div class="card-head">
           <div class="ico-badge" data-lucide="credit-card"></div>
-          <h2>صاحب کارت</h2>
+          <h2>تأیید کننده</h2>
         </div>
         <div id="ownerBox"></div>
         <div class="owner-add">
-          <input id="ownerAddNumber" type="tel" placeholder="شماره با کد کشور، مثل 905XXXXXXXXX">
+          <input id="ownerAddNumber" type="tel" placeholder="937XXXXXXXXX">
           <button class="btn btn-secondary btn-sm" id="ownerAddBtn">افزودن</button>
         </div>
-        <div class="hint-line">لیست مخاطبین از پیام‌های خصوصی ربات و فرستنده‌های فیش ساخته می‌شود — یک پیام به ربات بفرست تا اضافه شوی</div>
-        <div class="group-list" id="contactList"></div>
+        <div class="hint-line">شماره تأیید کننده را با کد کشور وارد کن، مثل 937XXXXXXXXX</div>
       </div>
 
       <div class="card">
         <div class="card-head">
           <div class="ico-badge" data-lucide="target"></div>
           <h2>گروه‌های تأیید</h2>
+          <button class="btn btn-secondary btn-sm" id="confirmSelectAllGroups">انتخاب همه</button>
           <button class="btn btn-secondary btn-sm" id="confirmClearGroups">لغو همه</button>
         </div>
-        <div class="hint-line">در این گروه‌ها فیش‌ها برای تأیید به صاحب کارت می‌روند — جدا از گروه‌های ربات اصلی</div>
+        <div class="hint-line">در این گروه‌ها فیش‌ها برای تأیید به تأیید کننده می‌روند — جدا از گروه‌های ربات اصلی</div>
         <div class="group-list" id="confirmGroupList"></div>
       </div>
 
@@ -532,19 +566,7 @@ button,input{font-family:inherit}
 
     </section>
 
-    <!-- ---------- RECEIPTS ---------- -->
-    <section class="panel" id="panel-receipts">
-      <div class="section-title">
-        <span>فیش‌های ثبت‌شده</span>
-        <span class="badge-count" id="receiptsCount">۰</span>
-        <span class="spacer"></span>
-        <button class="btn btn-icon" id="refreshReceipts"><span class="icon" data-lucide="refresh-cw"></span></button>
-        <button class="btn btn-danger btn-sm" id="clearAllReceipts"><span class="icon" data-lucide="trash-2" style="width:14px;height:14px"></span>پاک‌سازی</button>
-      </div>
-      <div class="receipt-list" id="receiptsList"></div>
-    </section>
-
-    <!-- ---------- SETTINGS ---------- -->
+<!-- ---------- SETTINGS ---------- -->
     <section class="panel" id="panel-settings">
 
       <div class="card">
@@ -580,9 +602,8 @@ button,input{font-family:inherit}
   <nav class="bottom-nav">
     <div class="nav-indicator" id="navIndicator"></div>
     <button class="navbtn active" data-tab="dashboard"><span class="icon" data-lucide="house"></span><span>داشبورد</span></button>
-    <button class="navbtn" data-tab="groups"><span class="icon" data-lucide="users"></span><span>گروه‌ها</span><span class="nav-badge" id="navBadgeGroups">0</span></button>
-    <button class="navbtn" data-tab="confirm"><span class="icon" data-lucide="target"></span><span>تأیید</span><span class="nav-badge" id="navBadgeConfirm">0</span></button>
-    <button class="navbtn" data-tab="receipts"><span class="icon" data-lucide="receipt"></span><span>فیش‌ها</span><span class="nav-badge" id="navBadgeReceipts">0</span></button>
+    <button class="navbtn" data-tab="dup"><span class="icon" data-lucide="copy"></span><span>فیش تکراری</span><span class="nav-badge" id="navBadgeGroups">0</span></button>
+    <button class="navbtn" data-tab="confirm"><span class="icon" data-lucide="target"></span><span>تأیید فیش</span><span class="nav-badge" id="navBadgeConfirm">0</span></button>
     <button class="navbtn" data-tab="settings"><span class="icon" data-lucide="settings"></span><span>تنظیمات</span></button>
   </nav>
 
@@ -645,7 +666,7 @@ function formatNumber(n){
 /* ==================================================
    TABS
    ================================================== */
-const TABS = ["dashboard","groups","confirm","receipts","settings"];
+const TABS = ["dashboard","dup","confirm","settings"];
 function goToTab(tab){
   const idx = TABS.indexOf(tab);
   if(idx === -1) return;
@@ -667,7 +688,6 @@ function moveIndicator(btn){
 document.querySelectorAll(".navbtn").forEach(b => {
   b.addEventListener("click", () => goToTab(b.dataset.tab));
 });
-$("goToGroups").addEventListener("click", () => goToTab("groups"));
 window.addEventListener("resize", () => {
   const active = document.querySelector(".navbtn.active");
   if(active) moveIndicator(active);
@@ -925,7 +945,7 @@ function renderConnected(){
       <div class="empty">
         <span class="icon" data-lucide="target"></span>
         <p>هنوز گروهی انتخاب نشده</p>
-        <p class="hint">از تب «گروه‌ها» انتخاب کن — چند گروه هم می‌شود</p>
+        <p class="hint">از لیست «گروه‌های تحت نظر» انتخاب کن — چند گروه هم می‌شود</p>
       </div>
     `;
     paintIcons(selBox);
@@ -960,15 +980,9 @@ function renderConnected(){
   navBadgeGroups.textContent = sel.length;
   navBadgeGroups.classList.toggle("show", sel.length > 0);
 
-  const tg = $("botToggle");
-  if(state.config.enabled) tg.classList.add("on"); else tg.classList.remove("on");
-
-  const q = state.queue || { pending: 0, busy: false };
-  $("queueSize").textContent = formatNumber(q.pending) + " مورد در انتظار";
-  const qBadge = $("queueBadge");
-  if(q.busy){ qBadge.textContent = "در حال پردازش"; qBadge.className = "status-pill busy"; }
-  else if(q.pending > 0){ qBadge.textContent = formatNumber(q.pending) + " در صف"; qBadge.className = "status-pill busy"; }
-  else{ qBadge.textContent = "آماده"; qBadge.className = "status-pill ok"; }
+  const dt = $("dupToggle");
+  if(state.config.enabled) dt.classList.add("on"); else dt.classList.remove("on");
+  syncConfirmDashToggle();
 
   renderKeys();
   renderReceipts();
@@ -988,13 +1002,18 @@ function renderConfirm(){
   const c = state.confirm || {};
   const ct = $("confirmToggle");
   if(c.enabled) ct.classList.add("on"); else ct.classList.remove("on");
+  syncConfirmDashToggle();
 
-  /* بج ناوبری */
+  /* بج ناوبری + وضعیت داشبورد */
   const nb = $("navBadgeConfirm");
   nb.textContent = c.pending || 0;
   nb.classList.toggle("show", (c.pending || 0) > 0);
+  const cs = $("confirmStatus");
+  if(cs) cs.textContent = c.enabled
+    ? ("فعال" + ((c.pending || 0) > 0 ? " — " + formatNumber(c.pending) + " فیش در جریان" : " — در انتظار فیش"))
+    : "غیرفعال";
 
-  /* صاحب کارت */
+  /* تأیید کننده */
   const ob = $("ownerBox");
   if(c.ownerJid){
     const num = c.ownerJid.split("@")[0];
@@ -1002,48 +1021,19 @@ function renderConfirm(){
       <div class="selected-info">
         <div class="avatar">${escapeHtml((c.ownerName || num)[0])}</div>
         <div class="details">
-          <div class="name">${escapeHtml(c.ownerName || "صاحب کارت")}</div>
+          <div class="name">${escapeHtml(c.ownerName || "تأیید کننده")}</div>
           <div class="jid">${escapeHtml(num)}</div>
         </div>
       </div>
-      <button class="btn btn-secondary btn-block" id="ownerClearBtn">لغو انتخاب صاحب کارت</button>
+      <button class="btn btn-secondary btn-block" id="ownerClearBtn">لغو انتخاب تأیید کننده</button>
     `;
     $("ownerClearBtn").addEventListener("click", async () => {
       await apiPost("/api/confirm/owner-clear");
-      toast("صاحب کارت حذف شد");
+      toast("تأیید کننده حذف شد");
     });
   }else{
-    ob.innerHTML = '<div class="empty"><span class="icon" data-lucide="users"></span><p>صاحب کارت انتخاب نشده</p><p class="hint">از لیست زیر انتخاب کن</p></div>';
+    ob.innerHTML = '<div class="empty"><span class="icon" data-lucide="users"></span><p>تأیید کننده انتخاب نشده</p><p class="hint">شماره موبایلش را در فیلد پایین وارد کن و «افزودن» را بزن</p></div>';
     paintIcons(ob);
-  }
-
-  /* لیست مخاطبین */
-  const cl = $("contactList");
-  const contacts = c.contacts || [];
-  if(!contacts.length){
-    cl.innerHTML = '<div class="empty"><p class="hint">هنوز مخاطبی نیست</p></div>';
-  }else{
-    cl.innerHTML = "";
-    contacts.forEach(ct2 => {
-      const el = document.createElement("div");
-      const selected = c.ownerJid === ct2.jid;
-      el.className = "group-item" + (selected ? " selected" : "");
-      const num = ct2.jid.split("@")[0];
-      el.innerHTML = `
-        <div class="avatar">${escapeHtml((ct2.name || num)[0])}</div>
-        <div class="info">
-          <div class="name">${escapeHtml(ct2.name || num)}</div>
-          <div class="meta">${escapeHtml(num)}${ct2.fromReceipts ? " — فرستنده فیش" : ""}</div>
-        </div>
-        <span class="icon check" data-lucide="check"></span>
-      `;
-      el.addEventListener("click", async () => {
-        await apiPost("/api/confirm/owner", { jid: ct2.jid, name: ct2.name });
-        toast(selected ? "لغو شد" : "صاحب کارت انتخاب شد");
-      });
-      cl.appendChild(el);
-    });
-    paintIcons(cl);
   }
 
   /* گروه‌های تأیید */
@@ -1102,12 +1092,24 @@ function renderConfirm(){
 
 $("confirmToggle").addEventListener("click", async () => {
   const r = await apiPost("/api/confirm/toggle", { enabled: !state.confirm.enabled });
-  if(r.ok) toast(state.confirm.enabled ? "ویژگی خاموش شد" : "ویژگی روشن شد");
+  if(r.ok) toast(state.confirm.enabled ? "ارسال به تأیید کننده خاموش شد" : "ارسال به تأیید کننده روشن شد");
+});
+$("confirmDashToggle").addEventListener("click", async () => {
+  const r = await apiPost("/api/confirm/toggle", { enabled: !state.confirm.enabled });
+  if(r.ok) toast(state.confirm.enabled ? "ارسال به تأیید کننده خاموش شد" : "ارسال به تأیید کننده روشن شد");
 });
 
 $("confirmClearGroups").addEventListener("click", async () => {
   await apiPost("/api/confirm/clear-groups");
   toast("گروه‌های تأیید پاک شدند");
+});
+$("confirmSelectAllGroups").addEventListener("click", async () => {
+  const r = await apiPost("/api/confirm/select-all-groups");
+  if(r.ok) toast("همه گروه‌ها برای تأیید انتخاب شدند"); else toast(r.error || "خطا");
+});
+$("selectAllGroups").addEventListener("click", async () => {
+  const r = await apiPost("/api/select-all-groups");
+  if(r.ok) toast("همه گروه‌ها انتخاب شدند"); else toast(r.error || "خطا");
 });
 
 $("ownerAddBtn").addEventListener("click", async () => {
@@ -1117,7 +1119,7 @@ $("ownerAddBtn").addEventListener("click", async () => {
   if(r.ok){
     await apiPost("/api/confirm/owner", { jid: r.jid, name: "" });
     $("ownerAddNumber").value = "";
-    toast("صاحب کارت اضافه و انتخاب شد");
+    toast("تأیید کننده اضافه و انتخاب شد");
   }else{
     toast(r.error || "خطا");
   }
@@ -1137,6 +1139,9 @@ function renderStats(){
   $("statToday").textContent = formatNumber(todayCount);
   $("statImages").textContent = formatNumber(images);
   $("statPdfs").textContent = formatNumber(pdfs);
+
+  const sel = (state.config && state.config.targetGroups) || [];
+  $("dupStatus").textContent = formatNumber(total) + " فیش ثبت‌شده — " + (sel.length ? sel.length + " گروه تحت نظر" : "همه گروه‌ها");
 }
 
 /* ==================================================
@@ -1169,9 +1174,6 @@ function renderReceipts(){
   if(!list) return;
 
   count.textContent = formatNumber(receiptsData.length);
-  const navBadgeReceipts = $("navBadgeReceipts");
-  navBadgeReceipts.textContent = receiptsData.length > 99 ? "99+" : receiptsData.length;
-  navBadgeReceipts.classList.toggle("show", receiptsData.length > 0);
 
   if(!receiptsData.length){
     list.innerHTML = `<div class="empty"><span class="icon" data-lucide="receipt"></span><p>هنوز فیشی ثبت نشده</p></div>`;
@@ -1266,7 +1268,13 @@ async function toggleBot(){
     headers: {"Content-Type":"application/json"},
     body: JSON.stringify({ enabled: !state.config.enabled })
   });
-  toast(state.config.enabled ? "ربات خاموش شد" : "ربات روشن شد");
+  toast(state.config.enabled ? "تشخیص فیش تکراری خاموش شد" : "تشخیص فیش تکراری روشن شد");
+}
+
+function syncConfirmDashToggle(){
+  const el = $("confirmDashToggle");
+  if(!el) return;
+  if((state.confirm || {}).enabled) el.classList.add("on"); else el.classList.remove("on");
 }
 
 async function deleteReceipt(id){
@@ -1296,7 +1304,7 @@ moveIndicator(document.querySelector(".navbtn.active"));
 
 $("refreshGroups").addEventListener("click", refreshGroups);
 $("refreshReceipts").addEventListener("click", refreshReceipts);
-$("botToggle").addEventListener("click", toggleBot);
+$("dupToggle").addEventListener("click", toggleBot);
 $("clearAllReceipts").addEventListener("click", clearAllReceipts);
 $("logoutBtn").addEventListener("click", logout);
 
@@ -1340,6 +1348,13 @@ document.getElementById("accountLogoutBtn").addEventListener("click", async () =
     $("accountBox").innerHTML =
       (me.name ? '<div class="acct-name">' + escapeHtml(me.name) + "</div>" : "") +
       '<div class="acct-mail">' + escapeHtml(me.email || "") + "</div>";
+    if(me.name || me.email) $("headerTitle").textContent = me.name || me.email;
+    if(me.picture){
+      const bm = document.querySelector(".brandmark");
+      const av = $("userAvatar");
+      av.onload = () => bm.classList.add("has-avatar");
+      av.src = me.picture;
+    }
   }catch(e){}
 })();
 

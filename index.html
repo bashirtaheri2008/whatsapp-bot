@@ -1,0 +1,1372 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0a0f0d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<title>پنل ربات واتساپ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0a0f0d;
+  --bg-1:#0f1613;
+  --bg-2:#141e1a;
+  --bg-3:#1b2721;
+  --bg-3-hover:#20302a;
+  --border:#22302a;
+  --border-soft:#182420;
+  --accent:#25e37f;
+  --accent-dim:#1aa860;
+  --accent-ink:#00190f;
+  --accent-glow:rgba(37,227,127,.16);
+  --text:#eef6f1;
+  --text-dim:#8ea299;
+  --text-faint:#576860;
+  --danger:#f2596b;
+  --danger-soft:rgba(242,89,107,.14);
+  --warning:#f0b640;
+  --warning-soft:rgba(240,182,64,.14);
+  --info:#4fb3e8;
+  --r-lg:20px;
+  --r-md:14px;
+  --r-sm:10px;
+  --safe-top:env(safe-area-inset-top);
+  --safe-bottom:env(safe-area-inset-bottom);
+  --header-h:58px;
+  --nav-h:60px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden;overscroll-behavior:none;touch-action:manipulation}
+body{
+  margin:0;background:var(--bg);color:var(--text);
+  font-family:'Vazirmatn',-apple-system,BlinkMacSystemFont,"Segoe UI",Tahoma,Arial,sans-serif;
+  height:100dvh;position:relative;
+  -webkit-font-smoothing:antialiased;
+}
+button,input{font-family:inherit}
+::selection{background:var(--accent-glow);color:var(--text)}
+
+/* ===================== ICONS ===================== */
+/* Lucide رسمی — svg خودش fill/stroke را به‌صورت attribute دارد؛ فقط سایز اینجا */
+.icon{width:20px;height:20px;flex-shrink:0}
+.ico-badge svg{width:16px;height:16px}
+.del-btn svg{width:15px;height:15px}
+
+/* ===================== APP SHELL ===================== */
+#screenApp{display:none;flex-direction:column;height:100dvh}
+
+.app-header{
+  flex-shrink:0;height:calc(var(--header-h) + var(--safe-top));
+  padding-top:var(--safe-top);
+  display:flex;align-items:center;gap:11px;padding-inline:16px;
+  background:rgba(14,21,18,.92);backdrop-filter:blur(14px) saturate(140%);
+  border-bottom:1px solid var(--border-soft);
+  position:relative;z-index:40;
+}
+.brandmark{
+  width:34px;height:34px;border-radius:11px;flex-shrink:0;position:relative;
+  background:linear-gradient(150deg,var(--accent),var(--accent-dim));
+  display:flex;align-items:center;justify-content:center;color:var(--accent-ink);
+}
+.brandmark img{display:none;width:100%;height:100%;border-radius:11px;object-fit:cover}
+.brandmark.has-avatar .icon{display:none}
+.brandmark.has-avatar img{display:block}
+.brandmark .pulse-dot{
+  position:absolute;bottom:-2px;left:-2px;width:11px;height:11px;border-radius:50%;
+  background:var(--accent);border:2px solid var(--bg-1);display:none;
+}
+.brandmark .pulse-dot.on{display:block}
+.brandmark .pulse-dot.on::after{
+  content:"";position:absolute;inset:-2px;border-radius:50%;background:var(--accent);
+  opacity:.55;animation:pulse-ring 1.8s ease-out infinite;
+}
+@keyframes pulse-ring{0%{transform:scale(.6);opacity:.55}100%{transform:scale(2.1);opacity:0}}
+
+.header-titles{flex:1;min-width:0}
+.header-titles h1{margin:0;font-size:14.5px;font-weight:700;line-height:1.3}
+.header-titles .sub{font-size:11px;color:var(--text-faint);direction:ltr;text-align:right;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.status-pill{
+  padding:5px 11px;border-radius:20px;font-size:11.5px;font-weight:700;
+  background:var(--bg-3);color:var(--text-dim);display:flex;align-items:center;gap:5px;flex-shrink:0;
+}
+.status-pill .dot{width:7px;height:7px;border-radius:50%;background:currentColor}
+.status-pill.ok{background:rgba(37,227,127,.13);color:var(--accent)}
+.status-pill.err{background:var(--danger-soft);color:var(--danger)}
+.status-pill.busy{background:var(--warning-soft);color:var(--warning)}
+
+/* ===================== PANELS ===================== */
+.panels{flex:1;position:relative;overflow:hidden}
+.panel{
+  position:absolute;inset:0;overflow-y:auto;padding:16px;padding-bottom:28px;
+  display:none;flex-direction:column;gap:12px;
+  animation:panel-in .22s ease both;
+}
+.panel.active{display:flex}
+@keyframes panel-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+@media (prefers-reduced-motion: reduce){.panel{animation:none}}
+
+.panel::-webkit-scrollbar,.group-list::-webkit-scrollbar,.receipt-list::-webkit-scrollbar{width:5px}
+.panel::-webkit-scrollbar-thumb,.group-list::-webkit-scrollbar-thumb,.receipt-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+.section-title{
+  display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700;
+  color:var(--text-dim);padding:2px 2px 0;
+}
+.section-title .spacer{margin-inline-start:auto}
+
+.card{background:var(--bg-2);border:1px solid var(--border-soft);border-radius:var(--r-lg);padding:16px}
+.card-head{display:flex;align-items:center;gap:9px;margin-bottom:13px}
+.card-head .ico-badge{
+  width:30px;height:30px;border-radius:9px;background:var(--bg-3);color:var(--accent);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.card-head h2{margin:0;font-size:13.5px;font-weight:700;flex:1}
+.card-head .count{font-size:11px;color:var(--text-faint);font-weight:600}
+
+/* ===================== BUTTONS ===================== */
+.btn{
+  padding:10px 16px;border-radius:var(--r-sm);border:0;font-size:13.5px;font-weight:700;
+  cursor:pointer;transition:transform .12s,opacity .2s,background .15s;
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap;
+}
+.btn:active{transform:scale(.95)}
+.btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
+.btn-primary{background:var(--accent);color:var(--accent-ink)}
+.btn-secondary{background:var(--bg-3);color:var(--text)}
+.btn-danger{background:var(--danger-soft);color:var(--danger)}
+.btn-block{width:100%}
+.btn-sm{padding:7px 12px;font-size:12px}
+.btn-icon{width:32px;height:32px;padding:0;border-radius:9px;background:var(--bg-3);color:var(--text-dim)}
+.btn-icon:active{background:var(--bg-3-hover)}
+
+/* ===================== DASHBOARD: active group ===================== */
+.active-group-card{
+  background:linear-gradient(160deg,rgba(37,227,127,.10),transparent 60%),var(--bg-2);
+  border:1px solid var(--border-soft);
+}
+.selected-info{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.selected-info .avatar{
+  width:46px;height:46px;border-radius:14px;flex-shrink:0;
+  background:linear-gradient(150deg,var(--accent),var(--accent-dim));
+  display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:800;color:var(--accent-ink);
+}
+.selected-info .details{flex:1;min-width:0}
+.selected-info .name{font-size:14.5px;font-weight:700}
+.selected-info .jid{font-size:11.5px;color:var(--text-dim);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.empty{text-align:center;padding:26px 16px;color:var(--text-dim);font-size:12.5px;display:flex;flex-direction:column;align-items:center;gap:4px}
+.empty .icon{width:34px;height:34px;color:var(--text-faint);margin-bottom:6px}
+.empty p{margin:0}
+.empty .hint{font-size:11.5px;color:var(--text-faint)}
+
+/* ===================== STATS ===================== */
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.stat-box{
+  background:var(--bg-3);border-radius:var(--r-md);padding:12px 8px;text-align:center;
+  display:flex;flex-direction:column;align-items:center;gap:5px;
+}
+.stat-box .ico{color:var(--accent);width:16px;height:16px}
+.stat-box .num{font-size:19px;font-weight:800;direction:ltr}
+.stat-box .lbl{font-size:10.5px;color:var(--text-faint)}
+
+/* ===================== TOGGLE ===================== */
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:11px 0}
+.toggle-row + .toggle-row{border-top:1px solid var(--border-soft)}
+.toggle-label{font-size:13.5px;font-weight:500}
+.toggle-label .sub{display:block;font-size:11px;color:var(--text-faint);font-weight:400;margin-top:2px}
+.toggle-switch{width:46px;height:27px;background:var(--bg-3);border-radius:14px;position:relative;cursor:pointer;transition:background .2s;flex-shrink:0}
+.toggle-switch::after{content:"";position:absolute;top:3px;right:3px;width:21px;height:21px;background:#fff;border-radius:50%;transition:transform .25s cubic-bezier(.34,1.4,.64,1);box-shadow:0 2px 6px rgba(0,0,0,.3)}
+.toggle-switch.on{background:var(--accent)}
+.toggle-switch.on::after{transform:translateX(-19px)}
+
+/* ===================== GROUPS ===================== */
+.group-list{display:flex;flex-direction:column;gap:8px}
+.group-item{
+  background:var(--bg-3);border:1.5px solid transparent;border-radius:var(--r-md);
+  padding:11px 12px;cursor:pointer;transition:border-color .15s,background .15s;
+  display:flex;align-items:center;gap:10px;
+}
+.group-item:active{background:var(--bg-3-hover)}
+.group-item.selected{border-color:var(--accent);background:rgba(37,227,127,.07)}
+.group-item .avatar{
+  width:38px;height:38px;border-radius:12px;background:var(--bg-2);
+  display:flex;align-items:center;justify-content:center;font-size:14.5px;font-weight:700;color:var(--text-dim);flex-shrink:0;
+}
+.group-item.selected .avatar{background:linear-gradient(150deg,var(--accent),var(--accent-dim));color:var(--accent-ink)}
+.group-item .info{flex:1;min-width:0}
+.group-item .name{font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.group-item .meta{font-size:11px;color:var(--text-faint);margin-top:2px}
+.group-item .check{color:var(--accent);width:20px;height:20px;opacity:0;transform:scale(.6);transition:all .2s}
+.group-item.selected .check{opacity:1;transform:scale(1)}
+
+/* ===================== LOADER ===================== */
+.loader{display:inline-flex;gap:4px;align-items:center;justify-content:center}
+.loader span{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:dot 1.2s infinite}
+.loader span:nth-child(2){animation-delay:.2s}
+.loader span:nth-child(3){animation-delay:.4s}
+@keyframes dot{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-6px);opacity:1}}
+
+/* ===================== RECEIPTS ===================== */
+.receipt-list{display:flex;flex-direction:column;gap:8px}
+.receipt-item{
+  background:var(--bg-3);border-radius:var(--r-md);padding:13px 14px 11px;font-size:13px;
+  display:flex;flex-direction:column;gap:7px;position:relative;
+}
+.receipt-item .row2{display:flex;justify-content:space-between;gap:10px}
+.receipt-item .label{color:var(--text-faint);font-size:10.5px;margin-bottom:2px}
+.receipt-item .value{font-weight:600;direction:ltr;text-align:left;word-break:break-all}
+.receipt-item .amount{color:var(--accent);font-size:16px;font-weight:800;direction:ltr}
+.receipt-item .del-btn{
+  position:absolute;top:8px;left:8px;background:transparent;border:0;color:var(--text-faint);
+  width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:8px;cursor:pointer;
+}
+.receipt-item .del-btn:active{background:var(--danger-soft);color:var(--danger)}
+.receipt-item .sender-info{
+  font-size:10.5px;color:var(--text-faint);border-top:1px solid var(--border-soft);
+  padding-top:7px;margin-top:2px;display:flex;align-items:center;flex-wrap:wrap;gap:6px;
+}
+.receipt-item .sender-info b{color:var(--text-dim);font-weight:600}
+.badge-count{background:var(--accent);color:var(--accent-ink);padding:2px 8px;border-radius:10px;font-size:10.5px;font-weight:700}
+.source-badge{padding:2px 8px;border-radius:7px;font-size:9.5px;font-weight:700}
+.source-image{background:rgba(37,227,127,.16);color:var(--accent)}
+.source-pdf{background:var(--danger-soft);color:#ff8b96}
+
+/* ===================== KEYS ===================== */
+.key-item{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:var(--bg-3);border-radius:var(--r-sm);margin-bottom:6px;font-size:12px}
+.key-item:last-child{margin-bottom:0}
+.key-item .key-name{font-family:ui-monospace,"SF Mono",Consolas,monospace;direction:ltr;color:var(--text-dim);font-size:11.5px}
+.key-status{padding:3px 9px;border-radius:8px;font-size:10.5px;font-weight:700}
+.key-status.ok{background:rgba(37,227,127,.16);color:var(--accent)}
+.key-status.busy{background:var(--danger-soft);color:#ff8b96}
+
+.footnote{text-align:center;font-size:11px;color:var(--text-faint);padding:6px 0 2px}
+
+/* ===================== BOTTOM NAV ===================== */
+.bottom-nav{
+  flex-shrink:0;position:relative;display:flex;
+  height:calc(var(--nav-h) + var(--safe-bottom));padding-bottom:var(--safe-bottom);
+  background:rgba(14,21,18,.92);backdrop-filter:blur(14px) saturate(140%);
+  border-top:1px solid var(--border-soft);z-index:40;
+}
+.nav-indicator{
+  position:absolute;top:6px;height:3px;width:28px;border-radius:3px;background:var(--accent);
+  transition:transform .28s cubic-bezier(.4,0,.2,1);transform:translateX(0);
+  box-shadow:0 0 10px var(--accent-glow);
+}
+.navbtn{
+  flex:1;background:transparent;border:0;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:3px;color:var(--text-faint);cursor:pointer;position:relative;padding:6px 2px 0;
+  transition:color .15s;
+}
+.navbtn .icon{transition:transform .15s}
+.navbtn:active .icon{transform:scale(.88)}
+.navbtn.active{color:var(--accent)}
+.navbtn span{font-size:10.5px;font-weight:600}
+.nav-badge{
+  position:absolute;top:2px;left:calc(50% + 2px);min-width:15px;height:15px;padding:0 3px;border-radius:8px;
+  background:var(--danger);color:#fff;font-size:9px;font-weight:800;display:none;
+  align-items:center;justify-content:center;
+}
+.nav-badge.show{display:flex}
+
+/* ===================== CONFIRM PANEL ===================== */
+.confirm-flow{
+  display:flex;flex-direction:column;gap:8px;margin-top:12px;
+  padding:12px 14px;border-radius:12px;background:rgba(255,255,255,.04);
+}
+.cf-step{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--text-soft);direction:rtl}
+.cf-step .icon{width:16px;height:16px;color:var(--accent);flex-shrink:0}
+.cq-pending{width:20px;height:20px;color:var(--text-soft);flex-shrink:0}
+.power-line{display:flex;align-items:center;gap:8px;font-size:16px}
+.power-line .icon{width:17px;height:17px;color:var(--accent)}
+.power-num{font-size:22px;font-weight:800}
+.owner-add{
+  display:flex;gap:8px;margin-top:12px;
+}
+.owner-add input{
+  flex:1;background:rgba(255,255,255,.06);border:1px solid var(--border-soft);
+  border-radius:10px;padding:9px 12px;color:var(--text);font-size:13px;direction:ltr;text-align:left;
+}
+.hint-line{
+  font-size:11px;color:var(--text-soft);margin-top:8px;line-height:1.7;
+}
+.confirm-queue-item{
+  display:flex;align-items:center;gap:12px;padding:10px 4px;
+  border-bottom:1px solid var(--border-soft);
+}
+.confirm-queue-item:last-child{border-bottom:0}
+.cq-emoji{font-size:20px;width:24px;height:24px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.cq-info .name{font-size:13px;font-weight:600}
+.cq-info .meta{font-size:11.5px;color:var(--text-soft);margin-top:2px}
+
+/* ===================== ONBOARDING (pre-connection) ===================== */
+#screenOnboarding{
+  height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:24px;gap:22px;text-align:center;
+}
+.onb-mark{
+  width:64px;height:64px;border-radius:20px;
+  background:linear-gradient(150deg,var(--accent),var(--accent-dim));
+  display:flex;align-items:center;justify-content:center;color:var(--accent-ink);
+  box-shadow:0 12px 32px var(--accent-glow);
+}
+.onb-mark .icon{width:30px;height:30px}
+.onb-title{font-size:16px;font-weight:700;margin:0}
+.onb-sub{font-size:12.5px;color:var(--text-dim);margin:0;max-width:280px;line-height:1.8}
+.qr-frame{
+  background:#fff;padding:14px;border-radius:18px;width:250px;height:250px;
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 16px 40px rgba(0,0,0,.35);
+}
+.qr-frame img{display:block;width:100%;height:100%;object-fit:contain;border-radius:6px}
+.onb-steps{
+  background:var(--bg-2);border:1px solid var(--border-soft);border-radius:var(--r-md);
+  padding:14px 16px;font-size:12.5px;color:var(--text-dim);line-height:2;max-width:300px;
+}
+.onb-steps b{color:var(--accent)}
+.onb-status{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text-faint);font-weight:600}
+.onb-status .dot{width:7px;height:7px;border-radius:50%;background:var(--warning)}
+.onb-status.err .dot{background:var(--danger)}
+
+/* ===================== TOAST ===================== */
+#toast{
+  position:fixed;bottom:calc(var(--nav-h) + var(--safe-bottom) + 14px);left:50%;
+  transform:translateX(-50%) translateY(14px);
+  background:var(--bg-3);color:var(--text);border:1px solid var(--border);
+  padding:10px 18px;border-radius:24px;font-size:12.5px;font-weight:600;z-index:200;
+  opacity:0;pointer-events:none;transition:all .25s cubic-bezier(.4,0,.2,1);
+  box-shadow:0 10px 28px rgba(0,0,0,.45);max-width:86vw;text-align:center;
+}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ===================== PIN LOCK ===================== */
+#lockScreen{position:fixed;inset:0;z-index:500;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:24px}
+#lockScreen.hidden{display:none}
+.lock-inner{width:100%;max-width:300px;display:flex;flex-direction:column;align-items:center;gap:16px}
+.lock-badge{width:64px;height:64px;border-radius:22px;background:var(--bg-3);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--accent)}
+.lock-badge .icon{width:30px;height:30px}
+.lock-title{font-size:17px;font-weight:800;text-align:center}
+.lock-sub{font-size:12px;color:var(--text-dim);text-align:center;margin-top:4px}
+.lock-err{font-size:12px;color:var(--danger);text-align:center;min-height:16px}
+.pin-dots{display:flex;gap:14px;direction:ltr}
+.pin-dot{width:13px;height:13px;border-radius:50%;border:2px solid var(--text-dim);transition:all .15s}
+.pin-dot.filled{background:var(--accent);border-color:var(--accent)}
+.pin-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;width:100%;max-width:280px;direction:ltr}
+.pin-key{aspect-ratio:1.4/1;border-radius:18px;background:var(--bg-3);border:1px solid var(--border);color:var(--text);font-size:20px;font-weight:700;display:flex;align-items:center;justify-content:center;transition:background .12s}
+.pin-key:active{background:var(--accent-glow)}
+.pin-key.dim{font-size:12.5px;font-weight:600;color:var(--text-dim)}
+.glogin{display:flex;align-items:center;justify-content:center;gap:10px;text-decoration:none;margin-top:6px;font-weight:700}
+.account-box{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+.acct-name{font-weight:700;font-size:14px}
+.acct-mail{color:var(--text-dim);font-size:12px;direction:ltr;text-align:right}
+@keyframes pinShake{0%,100%{transform:translateX(0)}20%{transform:translateX(-9px)}40%{transform:translateX(9px)}60%{transform:translateX(-6px)}80%{transform:translateX(6px)}}
+.pin-dots.shake{animation:pinShake .4s}
+.pin-inputs{display:flex;flex-direction:column;gap:10px;margin-bottom:12px}
+.pin-field{width:100%;background:var(--bg-2);border:1px solid var(--border);border-radius:14px;color:var(--text);padding:12px 14px;font-size:14px;letter-spacing:6px;text-align:center;outline:none;direction:ltr}
+.pin-field:focus{border-color:var(--accent-dim)}
+</style>
+</head>
+<body>
+
+<!-- ============ LOGIN (GOOGLE) ============ -->
+<div id="lockScreen" class="hidden">
+  <div class="lock-inner">
+    <div class="lock-badge"><span class="icon" data-lucide="shield-check"></span></div>
+    <div>
+      <p class="lock-title" id="lockTitle">ورود به پنل</p>
+      <p class="lock-sub" id="lockSub">برای مدیریت بات واتساپ خودت با گوگل وارد شو</p>
+    </div>
+    <p class="lock-err" id="lockErr"></p>
+    <a class="btn btn-secondary btn-block glogin" id="googleLoginBtn" href="/api/auth/google">
+      <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.647 6.825 29.582 4.5 24 4.5 12.955 4.5 4.5 12.955 4.5 24S12.955 43.5 24 43.5c10.545 0 19.5-7.615 19.5-19.5 0-1.09-.112-2.153-.317-3.183z"/><path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.647 6.825 29.582 4.5 24 4.5 16.302 4.5 9.698 8.724 6.306 14.691z"/><path fill="#4CAF50" d="M24 44.5c5.582 0 10.674-2.14 14.244-5.611l-6.585-5.559C29.655 35.744 26.989 36.9 24 36.9c-5.211 0-9.639-3.336-11.296-7.945l-6.522 5.025C9.533 41.186 16.194 44.5 24 44.5z"/><path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303c-.792 2.237-2.231 4.166-4.087 5.571l.003-.002 6.585 5.559C37.153 39.614 44.5 33.75 44.5 24c0-1.09-.112-2.153-.317-3.183-.018-.095-.04-.19-.059-.284-.033-.161-.077-.319-.124-.473z"/></svg>
+      ورود با گوگل
+    </a>
+  </div>
+</div><!-- ============ ONBOARDING (disconnected / connecting / qr) ============ -->
+<div id="screenOnboarding">
+  <div class="onb-mark"><span class="icon" id="onbIcon"></span></div>
+  <div>
+    <p class="onb-title" id="onbTitle">در حال اتصال</p>
+    <p class="onb-sub" id="onbSub">چند لحظه صبر کن، داریم به سرور وصل می‌شویم</p>
+  </div>
+
+  <div id="onbQrWrap" style="display:none">
+    <div class="qr-frame" id="qrBox"><div class="loader"><span></span><span></span><span></span></div></div>
+  </div>
+
+  <div id="onbLoaderWrap"><div class="loader"><span></span><span></span><span></span></div></div>
+
+  <div class="onb-steps" id="onbSteps" style="display:none">
+    گوشی را بردار، واتساپ را باز کن و برو به<br>
+    <b>تنظیمات ← دستگاه‌های متصل ← افزودن دستگاه</b><br>
+    سپس این کد را اسکن کن
+  </div>
+
+  <div class="onb-status" id="onbStatus"><span class="dot"></span><span id="onbStatusText">در حال اتصال به سرور</span></div>
+</div>
+
+<!-- ============ APP SHELL (connected) ============ -->
+<div id="screenApp">
+
+  <header class="app-header">
+    <div class="brandmark">
+      <span class="icon" style="width:18px;height:18px"></span>
+      <img id="userAvatar" alt="" referrerpolicy="no-referrer">
+      <span class="pulse-dot" id="headerPulse"></span>
+    </div>
+    <div class="header-titles">
+      <h1 id="headerTitle">پنل ربات واتساپ</h1>
+      <div class="sub" id="botNumberLabel">—</div>
+    </div>
+    <div class="status-pill ok" id="statusBadge"><span class="dot"></span><span>متصل</span></div>
+  </header>
+
+  <div class="panels">
+
+    <!-- ---------- DASHBOARD ---------- -->
+    <section class="panel active" id="panel-dashboard">
+
+      <div class="card">
+        <div class="card-head">
+          <div class="ico-badge" data-lucide="layout-grid"></div>
+          <h2>قابلیت‌های ربات</h2>
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-label">
+            <b style="font-size:14.5px">۱. تشخیص فیش تکراری</b>
+            <span class="sub" id="dupStatus">فیش گروه‌ها بررسی و تکراری‌ها علامت می‌خورند</span>
+          </div>
+          <div class="toggle-switch" id="dupToggle"></div>
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-label">
+            <b style="font-size:14.5px">۲. ارسال فیش به تأیید کننده</b>
+            <span class="sub" id="confirmStatus">فیش‌ها برای تأیید نزد تأیید کننده می‌روند و ری‌اکشنش برمی‌گردد</span>
+          </div>
+          <div class="toggle-switch" id="confirmDashToggle"></div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ---------- DUPLICATE (تشخیص فیش تکراری) ---------- -->
+    <section class="panel" id="panel-dup">
+
+      <div class="section-title"><span>تشخیص فیش تکراری در گروه‌ها</span></div>
+
+      <div class="card">
+        <div class="card-head">
+          <div class="ico-badge" data-lucide="copy"></div>
+          <h2>این بخش چه می‌کند؟</h2>
+        </div>
+        <div class="confirm-flow">
+          <div class="cf-step"><span class="icon" data-lucide="scan-line"></span>فیش‌های گروه‌ها با هوش مصنوعی بررسی می‌شود</div>
+          <div class="cf-step"><span class="icon" data-lucide="copy"></span>فیش تکراری → جواب خودکار «ارسال شده»</div>
+          <div class="cf-step"><span class="icon" data-lucide="image-off"></span>عکس غیر بانکی → نادیده گرفته می‌شود</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div class="ico-badge" data-lucide="chart-column"></div>
+          <h2>آمار فیش‌ها</h2>
+        </div>
+        <div class="stats-grid">
+          <div class="stat-box"><span class="icon ico" data-lucide="layers"></span><div class="num" id="statTotal">۰</div><div class="lbl">کل</div></div>
+          <div class="stat-box"><span class="icon ico" data-lucide="calendar-check"></span><div class="num" id="statToday">۰</div><div class="lbl">امروز</div></div>
+          <div class="stat-box"><span class="icon ico" data-lucide="image"></span><div class="num" id="statImages">۰</div><div class="lbl">عکس</div></div>
+          <div class="stat-box"><span class="icon ico" data-lucide="file-text"></span><div class="num" id="statPdfs">۰</div><div class="lbl">PDF</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div class="ico-badge" data-lucide="users"></div>
+          <h2>گروه‌های تحت نظر</h2>
+          <button class="btn btn-secondary btn-sm" id="refreshGroups"><span class="icon" data-lucide="refresh-cw" style="width:14px;height:14px"></span>بروزرسانی</button>
+          <button class="btn btn-secondary btn-sm" id="selectAllGroups">انتخاب همه</button>
+        </div>
+        <div id="selectedGroupBox"></div>
+        <div class="hint-line">روی هر گروه بزن تا روشن/خاموش شود — هیچ انتخابی = همه گروه‌ها</div>
+        <div class="group-list" id="groupList"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div class="ico-badge" data-lucide="receipt"></div>
+          <h2>فیش‌های ثبت‌شده</h2>
+          <span class="badge-count" id="receiptsCount">۰</span>
+          <span class="spacer"></span>
+          <button class="btn btn-icon" id="refreshReceipts"><span class="icon" data-lucide="refresh-cw"></span></button>
+          <button class="btn btn-danger btn-sm" id="clearAllReceipts"><span class="icon" data-lucide="trash-2" style="width:14px;height:14px"></span>پاک‌سازی</button>
+        </div>
+        <div class="receipt-list" id="receiptsList"></div>
+      </div>
+
+    </section>
+
+    <!-- ---------- CONFIRM (ارسال فیش به تأیید کننده) ---------- -->
+    <section class="panel" id="panel-confirm">
+
+      <div class="section-title"><span>ارسال فیش به تأیید کننده و ری‌اکشن</span></div>
+
+      <div class="card">
+        <div class="card-head">
+          <div class="ico-badge" data-lucide="target"></div>
+          <h2>ارسال فیش به تأیید کننده</h2>
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-label">ویژگی فعال باشد<span class="sub">فیش گروه‌ها به تأیید کننده فوروارد می‌شود و ری‌اکشن او در گروه نمایش داده می‌شود</span></div>
+          <div class="toggle-switch" id="confirmToggle"></div>
+        </div>
+        <div class="confirm-flow">
+          <div class="cf-step"><span class="icon" data-lucide="scan-line"></span>کاربر فیش می‌فرستد — ربات اسکن می‌کند</div>
+          <div class="cf-step"><span class="icon" data-lucide="send-horizontal"></span>فیش فوروارد می‌شود به تأیید کننده — در انتظار</div>
+          <div class="cf-step"><span class="icon" data-lucide="circle-check"></span>ری‌اکشن تأیید کننده روی پیام گروه اعمال می‌شود</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div class="ico-badge" data-lucide="credit-card"></div>
+          <h2>تأیید کننده</h2>
+        </div>
+        <div id="ownerBox"></div>
+        <div class="owner-add">
+          <input id="ownerAddNumber" type="tel" placeholder="937XXXXXXXXX">
+          <button class="btn btn-secondary btn-sm" id="ownerAddBtn">افزودن</button>
+        </div>
+        <div class="hint-line">شماره تأیید کننده را با کد کشور وارد کن، مثل 937XXXXXXXXX</div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div class="ico-badge" data-lucide="target"></div>
+          <h2>گروه‌های تأیید</h2>
+          <button class="btn btn-secondary btn-sm" id="confirmSelectAllGroups">انتخاب همه</button>
+          <button class="btn btn-secondary btn-sm" id="confirmClearGroups">لغو همه</button>
+        </div>
+        <div class="hint-line">در این گروه‌ها فیش‌ها برای تأیید به تأیید کننده می‌روند — جدا از گروه‌های ربات اصلی</div>
+        <div class="group-list" id="confirmGroupList"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div class="ico-badge" data-lucide="receipt"></div>
+          <h2>فیش‌های در جریان</h2>
+        </div>
+        <div id="confirmQueue"></div>
+      </div>
+
+    </section>
+
+<!-- ---------- SETTINGS ---------- -->
+    <section class="panel" id="panel-settings">
+
+      <div class="card">
+        <div class="card-head">
+          <div class="ico-badge" data-lucide="key-round"></div>
+          <h2>قدرت هوش مصنوعی (AI)</h2>
+        </div>
+        <div id="keysList"></div>
+      </div>
+
+            <div class="card">
+        <div class="card-head">
+          <div class="ico-badge" data-lucide="user-round"></div>
+          <h2>حساب کاربری</h2>
+        </div>
+        <div class="account-box" id="accountBox"></div>
+        <button class="btn btn-secondary btn-block" id="accountLogoutBtn">خروج از حساب گوگل</button>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div class="ico-badge" data-lucide="log-out"></div>
+          <h2>اتصال واتساپ</h2>
+        </div>
+        <button class="btn btn-danger btn-block" id="logoutBtn">خروج از اکانت واتساپ</button>
+      </div>
+
+      <div class="footnote">پنل ربات واتساپ — سبک و سریع</div>
+    </section>
+
+  </div>
+
+  <nav class="bottom-nav">
+    <div class="nav-indicator" id="navIndicator"></div>
+    <button class="navbtn active" data-tab="dashboard"><span class="icon" data-lucide="house"></span><span>داشبورد</span></button>
+    <button class="navbtn" data-tab="dup"><span class="icon" data-lucide="copy"></span><span>فیش تکراری</span><span class="nav-badge" id="navBadgeGroups">0</span></button>
+    <button class="navbtn" data-tab="confirm"><span class="icon" data-lucide="target"></span><span>تأیید فیش</span><span class="nav-badge" id="navBadgeConfirm">0</span></button>
+    <button class="navbtn" data-tab="settings"><span class="icon" data-lucide="settings"></span><span>تنظیمات</span></button>
+  </nav>
+
+</div>
+
+<div id="toast"></div>
+
+<script src="lucide.min.js"></script>
+<script>
+/* ==================================================
+   ICONS
+   ================================================== */
+function paintIcons(root=document){
+  if(window.lucide && lucide.createIcons){
+    try{ lucide.createIcons({ icons: lucide.icons }); }catch(e){}
+  }
+}
+function lucideSvg(name){
+  if(!window.lucide || !lucide.icons) return "";
+  const icon = lucide.icons[name];
+  if(!icon) return "";
+  return lucide.createElement(icon).outerHTML;
+}
+let state = {
+  connectionState: "disconnected",
+  qr: null, qrImage: null,
+  botNumber: null,
+  groups: [],
+  config: { targetGroups: [], enabled: true },
+  confirm: { enabled: false, ownerJid: null, ownerName: "", sourceGroups: [], pending: 0, queue: [], contacts: [] },
+  models: { text: null, vision: null },
+  keys: [],
+  queue: { pending: 0, busy: false }
+};
+let receiptsData = [];
+let lastConnectionState = null;
+const $ = id => document.getElementById(id);
+
+/* ==================================================
+   UTILS
+   ================================================== */
+function toast(msg, dur = 2200){
+  const t = $("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(t._t);
+  t._t = setTimeout(() => t.classList.remove("show"), dur);
+}
+function escapeHtml(s){
+  return String(s || "").replace(/[&<>"']/g, c => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  }[c]));
+}
+function formatNumber(n){
+  if(!n && n !== 0) return "۰";
+  const s = String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return s.replace(/\d/g, d => "۰۱۲۳۴۵۶۷۸۹"[d]);
+}
+
+/* ==================================================
+   TABS
+   ================================================== */
+const TABS = ["dashboard","dup","confirm","settings"];
+function goToTab(tab){
+  const idx = TABS.indexOf(tab);
+  if(idx === -1) return;
+  document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+  document.querySelectorAll(".navbtn").forEach(b => b.classList.remove("active"));
+  $("panel-" + tab).classList.add("active");
+  $("panel-" + tab).scrollTop = 0;
+  const btn = document.querySelector('.navbtn[data-tab="' + tab + '"]');
+  btn.classList.add("active");
+  moveIndicator(btn);
+}
+function moveIndicator(btn){
+  const nav = btn.parentElement;
+  const navRect = nav.getBoundingClientRect();
+  const btnRect = btn.getBoundingClientRect();
+  const center = (btnRect.left - navRect.left) + btnRect.width / 2;
+  $("navIndicator").style.transform = "translateX(" + (center - 14) + "px)";
+}
+document.querySelectorAll(".navbtn").forEach(b => {
+  b.addEventListener("click", () => goToTab(b.dataset.tab));
+});
+window.addEventListener("resize", () => {
+  const active = document.querySelector(".navbtn.active");
+  if(active) moveIndicator(active);
+});
+
+/* ==================================================
+   AUTH — ورود با گوگل
+   ================================================== */
+let unlocked = false;
+const _rawFetch = window.fetch.bind(window);
+
+/* ۴۰۱ = سشن از بین رفته → برگرد به صفحه ورود */
+window.fetch = async function(url, opts){
+  opts = opts || {};
+  if(typeof url === "string" && url.startsWith("/api")){
+    const r = await _rawFetch(url, opts);
+    if(r.status === 401 && !url.startsWith("/api/auth")) forceLock();
+    return r;
+  }
+  return _rawFetch(url, opts);
+};
+
+function showLock(){
+  $("lockErr").textContent = "";
+  try{
+    const qs = new URLSearchParams(location.search);
+    if(qs.get("auth") === "error"){
+      $("lockErr").textContent = "ورود با گوگل ناموفق بود — دوباره تلاش کن";
+      history.replaceState(null, "", "/");
+    }
+  }catch(e){}
+  $("lockScreen").classList.remove("hidden");
+}
+function forceLock(){
+  unlocked = false;
+  try{ if(ws) ws.close(); }catch(e){}
+  if(wsRetry) clearTimeout(wsRetry);
+  stopHttpFallback();
+  showLock();
+}
+function unlock(){
+  unlocked = true;
+  $("lockScreen").classList.add("hidden");
+  connectWS();
+  setTimeout(() => { if(!gotState) startHttpFallback(); }, 6000);
+  /* اطمینان از شروع اتصال واتساپ — بی‌ضرر اگر از قبل وصل/در حال وصل باشد */
+  fetch("/api/connect", { method: "POST" }).catch(() => {});
+  fetch("/api/receipts")
+    .then(r => r.json())
+    .then(data => {
+      receiptsData = data.receipts || [];
+      renderStats();
+      renderReceipts();
+    })
+    .catch(() => {});
+}
+
+/* ==================================================
+   WEBSOCKET
+   ================================================== */
+let ws = null;
+let wsRetry = null;
+let wsFailCount = 0;
+let httpFallback = null;
+let gotState = false;
+
+function stopHttpFallback(){
+  if(httpFallback){ clearInterval(httpFallback); httpFallback = null; }
+}
+function startHttpFallback(){
+  if(httpFallback) return;
+  console.warn("WS ناموفق — فال‌بک HTTP فعال شد");
+  let cycle = 0;
+  const poll = async () => {
+    try{
+      const r = await _rawFetch("/api/status");
+      if(!r.ok) return;
+      const d = await r.json();
+      gotState = true;
+      state.connectionState = d.state;
+      state.qr = d.qr; state.qrImage = d.qrImage || null; state.botNumber = d.botNumber;
+      state.groups = d.groups || []; state.config = d.config || state.config;
+      state.models = d.models || state.models; state.keys = d.keys || state.keys;
+      state.queue = d.queue || state.queue;
+      try{
+        const c = await _rawFetch("/api/confirm");
+        if(c.ok){ state.confirm = (await c.json()) || state.confirm; }
+      }catch(e){}
+      render();
+      if(cycle++ % 3 === 0){
+        const rr = await _rawFetch("/api/receipts");
+        if(rr.ok){
+          const rd = await rr.json();
+          receiptsData = rd.receipts || [];
+          renderReceipts(); renderStats();
+        }
+      }
+    }catch(e){}
+  };
+  poll();
+  httpFallback = setInterval(poll, 4000);
+}
+
+function connectWS(){
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  ws = new WebSocket(proto + "//" + location.host + "/");
+
+  ws.onopen = () => { wsFailCount = 0; stopHttpFallback(); if(wsRetry) clearTimeout(wsRetry); };
+
+  ws.onmessage = e => {
+    try{
+      const data = JSON.parse(e.data);
+      if(data.type === "state"){
+        gotState = true;
+        state.connectionState = data.state;
+        state.qr = data.qr;
+        state.qrImage = data.qrImage || null;
+        state.botNumber = data.botNumber;
+        state.groups = data.groups || [];
+        state.config = data.config || state.config;
+        state.confirm = data.confirm || state.confirm;
+        state.models = data.models || state.models;
+        state.keys = data.keys || state.keys;
+        render();
+      }
+      if(data.type === "receipts"){
+        receiptsData = data.receipts || [];
+        renderReceipts();
+        renderStats();
+      }
+      if(data.type === "keys"){
+        state.keys = data.keys || [];
+        renderKeys();
+      }
+    }catch(err){ console.error(err); }
+  };
+
+  ws.onclose = (e) => {
+    if(e.code === 4001){ forceLock(); return; }
+    if(unlocked){
+      wsRetry = setTimeout(connectWS, 2000);
+      if(++wsFailCount >= 3) startHttpFallback();
+    }
+  };
+  ws.onerror = () => {};
+}
+
+/* ==================================================
+   MAIN RENDER (onboarding vs app shell)
+   ================================================== */
+function render(){
+  const onboarding = $("screenOnboarding");
+  const app = $("screenApp");
+  const cs = state.connectionState;
+
+  if(cs === "connected"){
+    onboarding.style.display = "none";
+    app.style.display = "flex";
+    $("headerPulse").classList.add("on");
+    $("statusBadge").className = "status-pill ok";
+    $("statusBadge").innerHTML = '<span class="dot"></span><span>متصل</span>';
+    $("botNumberLabel").textContent = state.botNumber ? state.botNumber : "شماره ربات نامشخص";
+    if(lastConnectionState && lastConnectionState !== "connected") toast("به واتساپ متصل شد");
+    renderConnected();
+  } else {
+    app.style.display = "none";
+    onboarding.style.display = "flex";
+    renderOnboarding(cs);
+  }
+  lastConnectionState = cs;
+}
+
+function renderOnboarding(cs){
+  const icon = $("onbIcon");
+  const title = $("onbTitle");
+  const sub = $("onbSub");
+  const qrWrap = $("onbQrWrap");
+  const loaderWrap = $("onbLoaderWrap");
+  const steps = $("onbSteps");
+  const statusEl = $("onbStatus");
+  const statusText = $("onbStatusText");
+
+  qrWrap.style.display = "none";
+  loaderWrap.style.display = "none";
+  steps.style.display = "none";
+  statusEl.className = "onb-status";
+
+  if(cs === "qr" && state.qr){
+    icon.innerHTML = lucideSvg("ScanLine");
+    title.textContent = "اسکن کن و وصل شو";
+    sub.textContent = "این کد فقط چند دقیقه اعتبار دارد";
+    qrWrap.style.display = "block";
+    steps.style.display = "block";
+    statusText.textContent = "منتظر اسکن";
+    renderQR(state.qr, state.qrImage);
+  } else if(cs === "connecting"){
+    icon.innerHTML = lucideSvg("Wifi");
+    title.textContent = "در حال اتصال";
+    sub.textContent = "چند لحظه صبر کن، داریم به واتساپ وصل می‌شویم";
+    loaderWrap.style.display = "block";
+    statusText.textContent = "در حال برقراری ارتباط";
+  } else {
+    icon.innerHTML = lucideSvg("WifiOff");
+    title.textContent = "اتصال قطع است";
+    sub.textContent = "بدون نیاز به کاری از تو، به‌زودی دوباره تلاش می‌کنیم";
+    loaderWrap.style.display = "block";
+    statusEl.classList.add("err");
+    statusText.textContent = "قطع — در حال تلاش مجدد";
+  }
+}
+
+/* ==================================================
+   QR
+   ================================================== */
+function renderQR(qrText, qrImage){
+  const box = $("qrBox");
+  box.innerHTML = '<div class="loader"><span></span><span></span><span></span></div>';
+  if(qrImage){
+    const off = new Image();
+    off.onload = () => { box.innerHTML = ""; box.appendChild(off); };
+    off.onerror = () => renderQR(qrText, null);
+    off.src = qrImage;
+    return;
+  }
+  const url = "https://api.qrserver.com/v1/create-qr-code/?size=280x280&margin=10&data=" + encodeURIComponent(qrText);
+  const img = new Image();
+  img.onload = () => { box.innerHTML = ""; box.appendChild(img); };
+  img.onerror = () => {
+    box.innerHTML = '<div style="color:#333;font-size:11px;padding:10px;word-break:break-all">' +
+      escapeHtml(qrText.slice(0, 200)) + '</div>';
+  };
+  img.src = url;
+}
+
+/* ==================================================
+   CONNECTED — DASHBOARD / GROUPS
+   ================================================== */
+function renderConnected(){
+  const selBox = $("selectedGroupBox");
+  const sel = state.config.targetGroups || [];
+  if(sel.length){
+    selBox.innerHTML = `
+      <div class="selected-info">
+        <div class="avatar">${sel.length}</div>
+        <div class="details">
+          <div class="name">${sel.length} گروه فعال</div>
+          <div class="jid">${escapeHtml(sel.map(t => t.name || t.jid).join("، "))}</div>
+        </div>
+      </div>
+      <button class="btn btn-secondary btn-block" id="clearGroup">لغو انتخاب همه</button>
+    `;
+    $("clearGroup").addEventListener("click", clearGroup);
+  }else{
+    selBox.innerHTML = `
+      <div class="empty">
+        <span class="icon" data-lucide="target"></span>
+        <p>هنوز گروهی انتخاب نشده</p>
+        <p class="hint">از لیست «گروه‌های تحت نظر» انتخاب کن — چند گروه هم می‌شود</p>
+      </div>
+    `;
+    paintIcons(selBox);
+  }
+
+  const list = $("groupList");
+  if(!state.groups.length){
+    list.innerHTML = '<div class="empty"><span class="icon" data-lucide="users"></span><p>گروهی پیدا نشد</p></div>';
+    paintIcons(list);
+  }else{
+    list.innerHTML = "";
+    state.groups.forEach(g => {
+      const el = document.createElement("div");
+      const selected = (state.config.targetGroups || []).some(t => t.jid === g.jid);
+      el.className = "group-item" + (selected ? " selected" : "");
+      const initials = (g.name || "?")[0];
+      el.innerHTML = `
+        <div class="avatar">${escapeHtml(initials)}</div>
+        <div class="info">
+          <div class="name">${escapeHtml(g.name)}</div>
+          <div class="meta">${formatNumber(g.participants)} عضو</div>
+        </div>
+        <span class="icon check" data-lucide="check"></span>
+      `;
+      el.addEventListener("click", () => selectGroup(g));
+      list.appendChild(el);
+    });
+    paintIcons(list);
+  }
+
+  const navBadgeGroups = $("navBadgeGroups");
+  navBadgeGroups.textContent = sel.length;
+  navBadgeGroups.classList.toggle("show", sel.length > 0);
+
+  const dt = $("dupToggle");
+  if(state.config.enabled) dt.classList.add("on"); else dt.classList.remove("on");
+  syncConfirmDashToggle();
+
+  renderKeys();
+  renderReceipts();
+  renderStats();
+  renderConfirm();
+}
+
+/* ==================================================
+   CONFIRM PANEL (واسطه تایید فیش)
+   ================================================== */
+async function apiPost(url, body){
+  const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
+  return r.json();
+}
+
+function renderConfirm(){
+  const c = state.confirm || {};
+  const ct = $("confirmToggle");
+  if(c.enabled) ct.classList.add("on"); else ct.classList.remove("on");
+  syncConfirmDashToggle();
+
+  /* بج ناوبری + وضعیت داشبورد */
+  const nb = $("navBadgeConfirm");
+  nb.textContent = c.pending || 0;
+  nb.classList.toggle("show", (c.pending || 0) > 0);
+  const cs = $("confirmStatus");
+  if(cs) cs.textContent = c.enabled
+    ? ("فعال" + ((c.pending || 0) > 0 ? " — " + formatNumber(c.pending) + " فیش در جریان" : " — در انتظار فیش"))
+    : "غیرفعال";
+
+  /* تأیید کننده */
+  const ob = $("ownerBox");
+  if(c.ownerJid){
+    const num = c.ownerJid.split("@")[0];
+    ob.innerHTML = `
+      <div class="selected-info">
+        <div class="avatar">${escapeHtml((c.ownerName || num)[0])}</div>
+        <div class="details">
+          <div class="name">${escapeHtml(c.ownerName || "تأیید کننده")}</div>
+          <div class="jid">${escapeHtml(num)}</div>
+        </div>
+      </div>
+      <button class="btn btn-secondary btn-block" id="ownerClearBtn">لغو انتخاب تأیید کننده</button>
+    `;
+    $("ownerClearBtn").addEventListener("click", async () => {
+      await apiPost("/api/confirm/owner-clear");
+      toast("تأیید کننده حذف شد");
+    });
+  }else{
+    ob.innerHTML = '<div class="empty"><span class="icon" data-lucide="users"></span><p>تأیید کننده انتخاب نشده</p><p class="hint">شماره موبایلش را در فیلد پایین وارد کن و «افزودن» را بزن</p></div>';
+    paintIcons(ob);
+  }
+
+  /* گروه‌های تأیید */
+  const gl = $("confirmGroupList");
+  if(!state.groups.length){
+    gl.innerHTML = '<div class="empty"><span class="icon" data-lucide="users"></span><p>گروهی پیدا نشد</p></div>';
+    paintIcons(gl);
+  }else{
+    gl.innerHTML = "";
+    state.groups.forEach(g => {
+      const el = document.createElement("div");
+      const selected = (c.sourceGroups || []).some(t => t.jid === g.jid);
+      el.className = "group-item" + (selected ? " selected" : "");
+      el.innerHTML = `
+        <div class="avatar">${escapeHtml((g.name || "?")[0])}</div>
+        <div class="info">
+          <div class="name">${escapeHtml(g.name)}</div>
+          <div class="meta">${formatNumber(g.participants)} عضو</div>
+        </div>
+        <span class="icon check" data-lucide="check"></span>
+      `;
+      el.addEventListener("click", async () => {
+        await apiPost("/api/confirm/select-group", { jid: g.jid, name: g.name });
+      });
+      gl.appendChild(el);
+    });
+    paintIcons(gl);
+  }
+
+  /* فیش‌های در جریان */
+  const qb = $("confirmQueue");
+  const q = c.queue || [];
+  if(!q.length){
+    qb.innerHTML = '<div class="empty"><span class="icon" data-lucide="receipt"></span><p>موردی در جریان نیست</p></div>';
+    paintIcons(qb);
+  }else{
+    qb.innerHTML = "";
+    q.forEach(item => {
+      const el = document.createElement("div");
+      el.className = "confirm-queue-item";
+      const time = new Date(item.ts).toLocaleTimeString("fa-IR", { hour: "2-digit", minute: "2-digit" });
+      el.innerHTML = `
+        ${item.answered
+          ? `<div class="cq-emoji">${escapeHtml(item.answer)}</div>`
+          : `<span class="icon cq-pending" data-lucide="clock"></span>`}
+        <div class="cq-info">
+          <div class="name">${escapeHtml(item.group || "")} — ${escapeHtml(item.sender || "")}</div>
+          <div class="meta">${item.amount ? formatNumber(Number(item.amount)) + " " + escapeHtml(item.currency || "") + " — " : ""}${time}</div>
+        </div>
+      `;
+      qb.appendChild(el);
+    });
+    paintIcons(qb);
+  }
+}
+
+$("confirmToggle").addEventListener("click", async () => {
+  const r = await apiPost("/api/confirm/toggle", { enabled: !state.confirm.enabled });
+  if(r.ok) toast(state.confirm.enabled ? "ارسال به تأیید کننده خاموش شد" : "ارسال به تأیید کننده روشن شد");
+});
+$("confirmDashToggle").addEventListener("click", async () => {
+  const r = await apiPost("/api/confirm/toggle", { enabled: !state.confirm.enabled });
+  if(r.ok) toast(state.confirm.enabled ? "ارسال به تأیید کننده خاموش شد" : "ارسال به تأیید کننده روشن شد");
+});
+
+$("confirmClearGroups").addEventListener("click", async () => {
+  await apiPost("/api/confirm/clear-groups");
+  toast("گروه‌های تأیید پاک شدند");
+});
+$("confirmSelectAllGroups").addEventListener("click", async () => {
+  const r = await apiPost("/api/confirm/select-all-groups");
+  if(r.ok) toast("همه گروه‌ها برای تأیید انتخاب شدند"); else toast(r.error || "خطا");
+});
+$("selectAllGroups").addEventListener("click", async () => {
+  const r = await apiPost("/api/select-all-groups");
+  if(r.ok) toast("همه گروه‌ها انتخاب شدند"); else toast(r.error || "خطا");
+});
+
+$("ownerAddBtn").addEventListener("click", async () => {
+  const num = $("ownerAddNumber").value.trim();
+  if(!num){ toast("شماره را وارد کن"); return; }
+  const r = await apiPost("/api/confirm/add-contact", { number: num });
+  if(r.ok){
+    await apiPost("/api/confirm/owner", { jid: r.jid, name: "" });
+    $("ownerAddNumber").value = "";
+    toast("تأیید کننده اضافه و انتخاب شد");
+  }else{
+    toast(r.error || "خطا");
+  }
+});
+
+/* ==================================================
+   STATS
+   ================================================== */
+function renderStats(){
+  const total = receiptsData.length;
+  const today = new Date().toDateString();
+  const todayCount = receiptsData.filter(r => new Date(r.timestamp).toDateString() === today).length;
+  const images = receiptsData.filter(r => r.source === "image").length;
+  const pdfs = receiptsData.filter(r => r.source === "pdf").length;
+
+  $("statTotal").textContent = formatNumber(total);
+  $("statToday").textContent = formatNumber(todayCount);
+  $("statImages").textContent = formatNumber(images);
+  $("statPdfs").textContent = formatNumber(pdfs);
+
+  const sel = (state.config && state.config.targetGroups) || [];
+  $("dupStatus").textContent = formatNumber(total) + " فیش ثبت‌شده — " + (sel.length ? sel.length + " گروه تحت نظر" : "همه گروه‌ها");
+}
+
+/* ==================================================
+   API KEYS
+   ================================================== */
+function renderKeys(){
+  const box = $("keysList");
+  const k = state.keys || {};
+  if(k.totalPower === undefined){
+    box.innerHTML = '<div class="empty"><span class="icon" data-lucide="key-round"></span><p>در حال دریافت قدرت AI...</p></div>';
+    paintIcons(box);
+    return;
+  }
+  const ok = k.active > 0;
+  box.innerHTML = `
+    <div class="key-item" style="flex-direction:column;align-items:flex-start;gap:6px">
+      <div class="power-line"><span class="icon" data-lucide="zap"></span>قدرت کل: <b class="power-num">${formatNumber(k.totalPower)}</b> کردیت در دقیقه</div>
+      <div style="font-size:13px;color:${ok ? "#22c55e" : "#ef4444"}">● ${ok ? "فعال" : "غیرفعال"}</div>
+    </div>
+  `;
+  paintIcons(box);
+}
+
+/* ==================================================
+   RECEIPTS
+   ================================================== */
+function renderReceipts(){
+  const list = $("receiptsList");
+  const count = $("receiptsCount");
+  if(!list) return;
+
+  count.textContent = formatNumber(receiptsData.length);
+
+  if(!receiptsData.length){
+    list.innerHTML = `<div class="empty"><span class="icon" data-lucide="receipt"></span><p>هنوز فیشی ثبت نشده</p></div>`;
+    paintIcons(list);
+    return;
+  }
+
+  list.innerHTML = "";
+  receiptsData.forEach(r => {
+    const d = r.data || {};
+    const dateStr = new Date(r.timestamp).toLocaleString("fa-IR");
+    const source = r.source || "image";
+    const sourceLabel = source === "pdf" ? "PDF" : "عکس";
+    const sourceClass = source === "pdf" ? "source-pdf" : "source-image";
+
+    const el = document.createElement("div");
+    el.className = "receipt-item";
+    el.innerHTML = `
+      <button class="del-btn" title="حذف" data-lucide="trash-2"></button>
+      <div class="row2">
+        <div><div class="label">مبلغ</div><div class="amount">${escapeHtml((d.amount || "?") + " " + (d.currency || ""))}</div></div>
+        <div><div class="label">تاریخ فیش</div><div class="value">${escapeHtml(d.date || "?")} ${escapeHtml(d.time || "")}</div></div>
+      </div>
+      <div class="row2">
+        <div><div class="label">فرستنده</div><div class="value">${escapeHtml(d.senderName || "?")}</div></div>
+        <div><div class="label">گیرنده</div><div class="value">${escapeHtml(d.receiverName || "?")}</div></div>
+      </div>
+      ${d.senderIban ? `<div><div class="label">IBAN فرستنده</div><div class="value" style="font-size:11px">${escapeHtml(d.senderIban)}</div></div>` : ""}
+      ${d.receiverIban ? `<div><div class="label">IBAN گیرنده</div><div class="value" style="font-size:11px">${escapeHtml(d.receiverIban)}</div></div>` : ""}
+      ${d.trackingNo ? `<div><div class="label">شماره پیگیری</div><div class="value" style="font-size:11px">${escapeHtml(d.trackingNo)}</div></div>` : ""}
+      ${d.referenceCode ? `<div><div class="label">کد مرجع</div><div class="value" style="font-size:11px">${escapeHtml(d.referenceCode)}</div></div>` : ""}
+      <div class="sender-info">
+        <span class="source-badge ${sourceClass}">${sourceLabel}</span>
+        فرستاده شده توسط <b>${escapeHtml(r.sender)}</b> — ${escapeHtml(dateStr)}
+      </div>
+    `;
+    paintIcons(el);
+    el.querySelector(".del-btn").addEventListener("click", () => deleteReceipt(r.id));
+    list.appendChild(el);
+  });
+}
+
+/* ==================================================
+   ACTIONS
+   ================================================== */
+async function selectGroup(g){
+  const r = await fetch("/api/select-group", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ jid: g.jid, name: g.name })
+  });
+  const d = await r.json();
+  toast(d.selected ? "فعال شد: " + g.name : "حذف شد: " + g.name);
+}
+
+async function clearGroup(){
+  if(!confirm("همه گروه‌ها لغو شوند؟")) return;
+  await fetch("/api/clear-group", { method: "POST" });
+  toast("همه گروه‌ها لغو شدند");
+}
+
+async function refreshGroups(){
+  const btn = $("refreshGroups");
+  const original = btn.innerHTML;
+  btn.innerHTML = '<span class="loader"><span></span><span></span><span></span></span>';
+  btn.disabled = true;
+  try{
+    await fetch("/api/refresh-groups", { method: "POST" });
+    toast("لیست گروه‌ها بروزرسانی شد");
+  }catch(e){ toast("خطا در بروزرسانی"); }
+  btn.innerHTML = original;
+  btn.disabled = false;
+}
+
+async function refreshReceipts(){
+  const btn = $("refreshReceipts");
+  btn.disabled = true;
+  try{
+    const res = await fetch("/api/receipts");
+    const data = await res.json();
+    receiptsData = data.receipts || [];
+    renderReceipts();
+    renderStats();
+    toast("فیش‌ها بروزرسانی شدند");
+  }catch(e){ toast("خطا در بروزرسانی"); }
+  btn.disabled = false;
+}
+
+async function toggleBot(){
+  await fetch("/api/toggle", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ enabled: !state.config.enabled })
+  });
+  toast(state.config.enabled ? "تشخیص فیش تکراری خاموش شد" : "تشخیص فیش تکراری روشن شد");
+}
+
+function syncConfirmDashToggle(){
+  const el = $("confirmDashToggle");
+  if(!el) return;
+  if((state.confirm || {}).enabled) el.classList.add("on"); else el.classList.remove("on");
+}
+
+async function deleteReceipt(id){
+  if(!confirm("این فیش حذف شود؟ (از لیست تکراری‌ها هم پاک می‌شود)")) return;
+  await fetch("/api/receipts/" + id, { method: "DELETE" });
+  toast("فیش حذف شد");
+}
+
+async function clearAllReceipts(){
+  if(!confirm("همه فیش‌ها پاک شوند؟ این عمل قابل بازگشت نیست")) return;
+  if(!confirm("مطمئنی؟ دیگر هیچ فیشی در دیتابیس نمی‌ماند")) return;
+  await fetch("/api/receipts", { method: "DELETE" });
+  toast("همه فیش‌ها پاک شدند");
+}
+
+async function logout(){
+  if(!confirm("از اکانت واتساپ خارج شوی؟")) return;
+  await fetch("/api/logout", { method: "POST" });
+  toast("از واتساپ خارج شدی");
+}
+
+/* ==================================================
+   BIND + INIT
+   ================================================== */
+paintIcons();
+moveIndicator(document.querySelector(".navbtn.active"));
+
+$("refreshGroups").addEventListener("click", refreshGroups);
+$("refreshReceipts").addEventListener("click", refreshReceipts);
+$("dupToggle").addEventListener("click", toggleBot);
+$("clearAllReceipts").addEventListener("click", clearAllReceipts);
+$("logoutBtn").addEventListener("click", logout);
+
+// جلوگیری کامل از زوم (پینچ / دابل‌تپ) برای حس اپلیکیشن‌واقعی
+document.addEventListener("gesturestart", e => e.preventDefault());
+document.addEventListener("dblclick", e => e.preventDefault(), { passive:false });
+let lastTouchEnd = 0;
+document.addEventListener("touchend", e => {
+  const now = Date.now();
+  if(now - lastTouchEnd <= 300) e.preventDefault();
+  lastTouchEnd = now;
+}, { passive:false });
+
+
+
+setInterval(() => {
+  if(unlocked && state.connectionState === "connected"){
+    fetch("/api/status")
+      .then(r => r.json())
+      .then(data => {
+        state.queue = data.queue || { pending: 0, busy: false };
+        renderConnected();
+      })
+      .catch(() => {});
+  }
+}, 10000);
+
+/* ==================================================
+   ACCOUNT + INIT
+   ================================================== */
+document.getElementById("accountLogoutBtn").addEventListener("click", async () => {
+  try{ await _rawFetch("/api/auth/logout", { method: "POST" }); }catch(e){}
+  location.reload();
+});
+
+(async function loadAccount(){
+  try{
+    const r = await _rawFetch("/api/auth/me");
+    if(!r.ok) return;
+    const me = await r.json();
+    $("accountBox").innerHTML =
+      (me.name ? '<div class="acct-name">' + escapeHtml(me.name) + "</div>" : "") +
+      '<div class="acct-mail">' + escapeHtml(me.email || "") + "</div>";
+    if(me.name || me.email) $("headerTitle").textContent = me.name || me.email;
+    if(me.picture){
+      const bm = document.querySelector(".brandmark");
+      const av = $("userAvatar");
+      av.onload = () => bm.classList.add("has-avatar");
+      av.src = me.picture;
+    }
+  }catch(e){}
+})();
+
+/* شروع: بررسی سشن گوگل — اگر لاگین است پنل باز می‌شود */
+(async function initAuth(){
+  try{
+    const r = await _rawFetch("/api/auth/me");
+    if(r.ok){ unlock(); return; }
+  }catch(e){}
+  showLock();
+})();
+</script>
+
+</body>
+</html>

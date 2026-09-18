@@ -764,6 +764,12 @@ function cloudEnabled(){
   return !!(GH_TOKEN && GH_REPO);
 }
 
+let ghPausedUntil = 0; /* تا این زمان بکاپ‌ها متوقف می‌مانند (لی‌میت) */
+
+function ghRateLimited(){
+  return Date.now() < ghPausedUntil;
+}
+
 async function ghApi(method, urlPath, body){
   try{
     const headers = {
@@ -773,7 +779,13 @@ async function ghApi(method, urlPath, body){
     };
     const opts = { method, headers };
     if(body) opts.body = JSON.stringify(body);
-    return await fetch(GH_BASE + urlPath, opts);
+    const r = await fetch(GH_BASE + urlPath, opts);
+    if(r.status === 403 || r.status === 429){
+      /* لی‌میت خورد — ۱۵ دقیقه بکاپ بخواب */
+      ghPausedUntil = Date.now() + 15 * 60 * 1000;
+      console.warn("⏸️ لی‌میت گیت‌هاب — بکاپ‌ها تا ۱۵ دقیقه متوقف شد");
+    }
+    return r;
   }catch(e){
     return { ok: false, status: 0, json: async () => ({}) };
   }
@@ -833,7 +845,7 @@ let backupBusy = false;
 const lastBackupReqByUser = new Map();
 
 async function backupUser(gid, reason){
-  if(!cloudEnabled() || backupBusy) return;
+  if(!cloudEnabled() || backupBusy || ghRateLimited()) return;
   const u = users.get(gid);
   if(!u) return;
   backupBusy = true;
@@ -957,7 +969,7 @@ function startCloudTasks(){
   if(!cloudEnabled()) return;
   setInterval(() => {
     for(const gid of users.keys()) backupUser(gid, "خودکار");
-  }, 5 * 60 * 1000);
+  }, 15 * 60 * 1000);
   const extUrl = process.env.RENDER_EXTERNAL_URL;
   if(extUrl){
     setInterval(() => { fetch(extUrl + "/api/health").catch(() => {}); }, 10 * 60 * 1000);
@@ -984,17 +996,46 @@ const SESSION_COOKIE = "wasid";
 const SESSION_MAX_AGE = 30 * 24 * 3600 * 1000; /* ۳۰ روز */
 
 let SESSION_SECRET = "";
-function initSessionSecret(){
+let SESSION_SECRET_TEMP = false;
+let SESSION_WAIT_STARTED = 0;
+
+async function initSessionSecret(){
+  if(!SESSION_WAIT_STARTED) SESSION_WAIT_STARTED = Date.now();
   const secretFile = path.join(DATA_ROOT, "server-secret.txt");
   try{
     if(fs.existsSync(secretFile)){
-      SESSION_SECRET = fs.readFileSync(secretFile, "utf8").trim();
+      SESSION_SECRET = fs.readFileSync(secretFile, "utf-8").trim();
       if(SESSION_SECRET.length >= 32) return;
+    }
+    /* رمز قبلی از گیت‌هاب بیاد تا کوکی‌های ورود معتبر بمانند */
+    if(cloudEnabled()){
+      try{
+        const ok = await ghGetFile("server-secret.txt", secretFile);
+        if(ok){
+          SESSION_SECRET = fs.readFileSync(secretFile, "utf-8").trim();
+          if(SESSION_SECRET.length >= 32){
+            console.log("🔑 رمز سشن از گیت‌هاب بازیابی شد — ورود کاربران حفظ می‌شود");
+            return;
+          }
+        }else if(ghRateLimited() && Date.now() - SESSION_WAIT_STARTED < 90000){
+          /* لی‌میت است: حداکثر ۹۰ ثانیه صبر کن، سرویس گیر نکند */
+          await new Promise(r => setTimeout(r, 5000));
+          return await initSessionSecret();
+        }else if(ghRateLimited()){
+          /* لی‌میت طولانی: با رمز موقت بوت شو تا سرویس زنده بماند؛
+             رمز تازه در گیت‌هاب دوباره نمی‌رود تا کوکی‌ها بعد از ریست سالم باشند */
+          console.warn("⚠️ لی‌میت گیت‌هاب — بوت با رمز موقت (ورود گوگل فقط همین دوره نامعتبر)");
+          SESSION_SECRET = crypto.randomBytes(32).toString("hex");
+          SESSION_SECRET_TEMP = true;
+          return;
+        }
+      }catch(e){ console.warn("⚠️ خطای دریافت رمز سشن از گیت‌هاب:", e.message); }
+      console.warn("⚠️ رمز سشن در گیت‌هاب نبود — ساخته می‌شود");
     }
     SESSION_SECRET = crypto.randomBytes(32).toString("hex");
     fs.mkdirSync(DATA_ROOT, { recursive: true });
     fs.writeFileSync(secretFile, SESSION_SECRET);
-    if(cloudEnabled()){
+    if(cloudEnabled() && !SESSION_SECRET_TEMP){
       ghPutFile("server-secret.txt", secretFile).catch(() => {});
     }
   }catch(e){
@@ -1400,7 +1441,7 @@ class UserBot {
           }
 
           /* ری‌اکشن روی فیش فورواردشده → انتقال به گروه
-             (شناسایی فقط با id پیام ردیابی‌شده — چنین id فقط در چت صاحب کارت وجود دارد) */
+             (شناسایی فقط با id پیام ردیابی‌شده — چنین id فقط در چت تأیید کننده وجود دارد) */
           const rMsg = msg.message?.reactionMessage;
           if(rMsg && rMsg.text && !rJid.endsWith("@g.us") && !rJid.endsWith("@broadcast") && !msg.key.fromMe){
             const entry = this.confirmCfg.queue[rMsg.key?.id];
@@ -1421,7 +1462,7 @@ class UserBot {
                     }
                   }
                 });
-                console.log("✅ تایید: صاحب کارت ری‌اکشن زد", rMsg.text, "→ گروه:", entry.group);
+                console.log("✅ تایید: تأیید کننده ری‌اکشن زد", rMsg.text, "→ گروه:", entry.group);
               }catch(e){ console.error("انتقال ری‌اکشن:", e.message); }
               this.broadcastState();
             }
@@ -1630,7 +1671,7 @@ class UserBot {
         return;
       }
 
-      /* فوروارد فایل اصلی به صاحب کارت */
+      /* فوروارد فایل اصلی به تأیید کننده */
       const raw = await downloadMediaMessage(msg, "buffer", {},
         { logger: pino({ level: "silent" }), reuploadRequest: this.sock.updateMediaMessage });
 
@@ -1680,7 +1721,7 @@ class UserBot {
 
       /* ⏫ در انتظار تأیید */
       await this.sock.sendMessage(groupJid, { react: { text: CONFIRM_WAIT, key: msg.key } });
-      console.log("📤 تایید: فیش به صاحب کارت فوروارد شد | گروه:", gName);
+      console.log("📤 تایید: فیش به تأیید کننده فوروارد شد | گروه:", gName);
     }catch(e){
       console.error("processConfirmTask:", e.message);
       try{ await this.sock.sendMessage(msg.key.remoteJid, { react: { text: "⚠️", key: msg.key } }); }catch(err){}
@@ -1878,6 +1919,13 @@ app.post("/api/clear-group", (req, res) => {
   u.runtimeConfig.targetGroups = [];
   u.saveConfig(); u.broadcastState();
   res.json({ ok: true });
+
+app.post("/api/select-all-groups", (req, res) => {
+  const u = req.user;
+  u.runtimeConfig.targetGroups = (u.groupsCache || []).map(g => ({ jid: g.jid, name: g.name || "" }));
+  u.saveConfig(); u.broadcastState();
+  res.json({ ok: true, count: u.runtimeConfig.targetGroups.length });
+});
 });
 
 app.post("/api/allowed-numbers", (req, res) => {
@@ -1947,13 +1995,20 @@ app.post("/api/confirm/clear-groups", (req, res) => {
   res.json({ ok: true });
 });
 
+app.post("/api/confirm/select-all-groups", (req, res) => {
+  const u = req.user;
+  u.confirmCfg.sourceGroups = (u.groupsCache || []).map(g => ({ jid: g.jid, name: g.name || "" }));
+  u.saveConfirm(); u.broadcastState();
+  res.json({ ok: true, count: u.confirmCfg.sourceGroups.length });
+});
+
 app.post("/api/confirm/add-contact", (req, res) => {
   const u = req.user;
   let num = String(req.body.number || "").replace(/\D/g, "");
   if(!num) return res.json({ ok: false, error: "شماره لازم است" });
   if(num.startsWith("00")) num = num.slice(2);
   if(num.startsWith("0")) num = num.slice(1);
-  if(num.length <= 10) num = "90" + num; /* پیش‌فرض ترکیه اگر کد کشور داده نشد */
+  if(num.length <= 9) num = "93" + num; /* پیش‌فرض افغانستان اگر کد کشور داده نشد */
   const jid = num + "@s.whatsapp.net";
   u.confirmCfg.contacts[jid] = req.body.name || "";
   u.saveConfirm(); u.broadcastState();
@@ -2033,31 +2088,33 @@ setInterval(() => {
    START
    ================================================== */
 
-initSessionSecret();
-keyManager.init();
+(async () => {
+  await initSessionSecret();
+  keyManager.init();
 
-execFile("pdftoppm", ["-v"], (err, stdout, stderr) => {
-  const out = (stderr || stdout || "").split("\n")[0];
-  if(err && !out){
-    console.error("⚠️ pdftoppm نصب نیست!");
-  }else{
-    console.log("✅ pdftoppm:", out.trim());
-  }
-});
-
-server.listen(PORT, () => {
-  console.log("");
-  console.log("🌐 پنل وب: http://localhost:" + PORT);
-  console.log("🤖 نسخه چندکاربره v9.0.0 — ورود با گوگل");
-  console.log("🔑 OAuth گوگل:", googleOAuthConfigured() ? "فعال" : "❌ تنظیم نشده");
-  console.log("💾 حداکثر بات هم‌زمان:", MAX_CONCURRENT_BOTS);
-  console.log("🎯 تشخیص تکراری سخت‌گیرانه (Strict)");
-  console.log("📅 فرمت تاریخ: 2026/09/15 10:14 PM");
-  console.log("");
-
-  startCloudTasks();
-
-  restoreAllFromGithub().finally(() => {
-    ensureModels().catch(e => console.error("خطای اولیه مدل‌ها:", e.message));
+  execFile("pdftoppm", ["-v"], (err, stdout, stderr) => {
+    const out = (stderr || stdout || "").split("\n")[0];
+    if(err && !out){
+      console.error("⚠️ pdftoppm نصب نیست!");
+    }else{
+      console.log("✅ pdftoppm:", out.trim());
+    }
   });
-});
+
+  server.listen(PORT, () => {
+    console.log("");
+    console.log("🌐 پنل وب: http://localhost:" + PORT);
+    console.log("🤖 نسخه چندکاربره v9.0.0 — ورود با گوگل");
+    console.log("🔑 OAuth گوگل:", googleOAuthConfigured() ? "فعال" : "❌ تنظیم نشده");
+    console.log("💾 حداکثر بات هم‌زمان:", MAX_CONCURRENT_BOTS);
+    console.log("🎯 تشخیص تکراری سخت‌گیرانه (Strict)");
+    console.log("📅 فرمت تاریخ: 2026/09/15 10:14 PM");
+    console.log("");
+
+    startCloudTasks();
+
+    restoreAllFromGithub().finally(() => {
+      ensureModels().catch(e => console.error("خطای اولیه مدل‌ها:", e.message));
+    });
+  });
+})();
