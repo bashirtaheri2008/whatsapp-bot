@@ -1682,25 +1682,16 @@ class UserBot {
       const raw = await downloadMediaMessage(msg, "buffer", {},
         { logger: pino({ level: "silent" }), reuploadRequest: this.sock.updateMediaMessage });
 
-      const lines = ["📩 *فیش جدید — نیازمند تأیید شما*", ""];
-      if(gName) lines.push("👥 گروه: " + gName);
-      lines.push("👤 فرستنده: " + (msg.pushName || senderNum) + " (" + senderNum + ")");
-      if(info.amount) lines.push("💰 مبلغ: " + info.amount + " " + (info.currency || ""));
-      if(info.bank) lines.push("🏦 بانک: " + info.bank);
-      if(info.date) lines.push("📅 تاریخ فیش: " + info.date + (info.time ? " — " + info.time : ""));
-      lines.push("");
-      lines.push("بعد از بررسی حساب، روی همین پیام ری‌اکشن بزن — همان ری‌اکشن دقیقا در گروه روی فیش نشان داده می‌شود ⬇️");
-
+      /* فیش بدون کپشن — فقط خود فایل اصلی */
       let sent = null;
       if(msgType === "pdf"){
         sent = await this.sock.sendMessage(this.confirmCfg.ownerJid, {
-          document: raw, mimetype: "application/pdf", fileName: "receipt.pdf",
-          caption: lines.join("\n")
+          document: raw, mimetype: "application/pdf", fileName: "receipt.pdf"
         });
       }else{
         const mt = msg.message?.imageMessage?.mimetype || "image/jpeg";
         sent = await this.sock.sendMessage(this.confirmCfg.ownerJid, {
-          image: raw, mimetype: mt, caption: lines.join("\n")
+          image: raw, mimetype: mt
         });
       }
 
