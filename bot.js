@@ -915,6 +915,11 @@ async function restoreAllFromGithub(){
     if(!fs.existsSync(secretFile)){
       await ghGetFile("server-secret.txt", secretFile);
     }
+    /* تنظیمات مدیریت */
+    try{
+      if(!fs.existsSync(ADMIN_FILE)) await ghGetFile("admin.json", ADMIN_FILE);
+    }catch(e){}
+    loadAdmin();
     /* فهرست کاربران */
     const idxLocal = path.join(USERS_DIR, "index.json");
     let index = null;
@@ -1570,6 +1575,7 @@ class UserBot {
   }
 
   async processReceiptTask(msg, msgType, senderNumber){
+    if(!adminOverrides(this.gid).allowDup) return; /* بخش قفل است — پردازش متوقف، اتصال واتساپ پابرجا */
     try{
       await this.sendReaction(msg, REACTION_PROCESSING);
 
@@ -1643,6 +1649,7 @@ class UserBot {
   }
 
   async processConfirmTask(msg, msgType){
+    if(!adminOverrides(this.gid).allowConfirm) return; /* بخش قفل است */
     try{
       const senderJid = msg.key.participant || msg.key.remoteJid;
       const senderNum = senderJid.split("@")[0].split(":")[0];
@@ -1755,9 +1762,90 @@ const app = express();
 app.use(express.json({ limit: "10mb" }));
 app.use(express.static(path.join(__dirname, "public")));
 
+/* ==================================================
+   ADMIN API — پنل مدیریت مستقل (CORS برای هاست خارجی)
+   کنترل دو بخش: فیش تکراری (dup) و فیش به تأیید (confirm)
+   ================================================== */
+const ADMIN_KEY = process.env.ADMIN_KEY || "hamgap-admin-2026";
+const ADMIN_FILE = path.join(DATA_ROOT, "admin.json");
+let adminState = { users: {} };
+function adminDefaults(){ return { allowDup: true, allowConfirm: true }; }
+function adminOverrides(gid){
+  return Object.assign(adminDefaults(), (adminState.users && adminState.users[gid]) || {});
+}
+function loadAdmin(){
+  try{
+    if(fs.existsSync(ADMIN_FILE)){
+      const d = JSON.parse(fs.readFileSync(ADMIN_FILE, "utf8"));
+      adminState = { users: (d && d.users) || {} };
+    }
+  }catch(e){ console.error("loadAdmin:", e.message); }
+}
+function saveAdmin(){
+  try{
+    fs.mkdirSync(DATA_ROOT, { recursive: true });
+    fs.writeFileSync(ADMIN_FILE, JSON.stringify(adminState, null, 2));
+  }catch(e){ console.error("saveAdmin:", e.message); }
+  if(cloudEnabled()) ghPutFile("admin.json", ADMIN_FILE).catch(() => {});
+}
+loadAdmin();
+
+/* CORS + احراز کلید مدیریت */
+app.use("/api/admin", (req, res, next) => {
+  res.set({
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, x-admin-key",
+    "Access-Control-Max-Age": "86400",
+    "Cache-Control": "no-store"
+  });
+  if(req.method === "OPTIONS") return res.sendStatus(204);
+  if(String(req.headers["x-admin-key"] || "") !== ADMIN_KEY){
+    return res.status(401).json({ ok: false, error: "کلید مدیریت نادرست است" });
+  }
+  next();
+});
+app.get("/api/admin/check", (req, res) => res.json({ ok: true }));
+app.get("/api/admin/users", (req, res) => {
+  const list = [];
+  let connected = 0, receiptsTotal = 0;
+  for(const [gid, u] of users.entries()){
+    if(u.connectionState === "connected") connected++;
+    const rc = (u.receipts && u.receipts.list) ? u.receipts.list.length : 0;
+    receiptsTotal += rc;
+    const ov = adminOverrides(gid);
+    list.push({
+      gid, email: u.meta.email || "", name: u.meta.name || "", picture: u.meta.picture || "",
+      connected: u.connectionState === "connected", state: u.connectionState,
+      botNumber: u.botNumber || null,
+      receipts: rc,
+      groups: (u.runtimeConfig.targetGroups || []).length,
+      confirmEnabled: !!(u.confirmCfg && u.confirmCfg.enabled),
+      allowDup: ov.allowDup, allowConfirm: ov.allowConfirm,
+      lastSeen: u.meta.lastSeen || null, createdAt: u.meta.createdAt || null
+    });
+  }
+  list.sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0));
+  res.json({ ok: true, users: list, total: list.length, connected, receiptsTotal });
+});
+app.post("/api/admin/user", (req, res) => {
+  const gid = String(req.body.gid || "");
+  if(!users.has(gid)) return res.status(404).json({ ok: false, error: "کاربر پیدا نشد" });
+  const cur = adminOverrides(gid);
+  const ov = {
+    allowDup: req.body.allowDup === undefined ? cur.allowDup : !!req.body.allowDup,
+    allowConfirm: req.body.allowConfirm === undefined ? cur.allowConfirm : !!req.body.allowConfirm
+  };
+  adminState.users[gid] = ov;
+  saveAdmin();
+  res.json({ ok: true, overrides: ov });
+});
+
+
+
 /* احراز هویت سشن — همه APIها به جز auth نیاز به کوکی دارند */
 app.use("/api", (req, res, next) => {
-  if(req.path.startsWith("/auth/") || req.path === "/health") return next();
+  if(req.path.startsWith("/auth/") || req.path === "/health" || req.path.startsWith("/admin/")) return next();
   const gid = sessionGid(req);
   if(!gid) return res.status(401).json({ error: "unauthorized" });
   /* کوکی امضاشده = خودمان صادرش کرده‌ایم؛ اگر کاربر هنوز ثبت نشده، ساخته می‌شود */
@@ -1901,6 +1989,7 @@ app.delete("/api/receipts", (req, res) => {
 
 app.post("/api/select-group", (req, res) => {
   const u = req.user;
+  if(!adminOverrides(u.gid).allowDup) return res.status(403).json({ ok: false, error: "بخش فیش تکراری برای شما فعال نیست" });
   const { jid, name } = req.body;
   if(!jid) return res.json({ ok: false, error: "jid لازم است" });
   const idx = u.runtimeConfig.targetGroups.findIndex(t => t.jid === jid);
@@ -1916,12 +2005,14 @@ app.post("/api/select-group", (req, res) => {
 
 app.post("/api/clear-group", (req, res) => {
   const u = req.user;
+  if(!adminOverrides(u.gid).allowDup) return res.status(403).json({ ok: false, error: "بخش فیش تکراری برای شما فعال نیست" });
   u.runtimeConfig.targetGroups = [];
   u.saveConfig(); u.broadcastState();
   res.json({ ok: true });
 
 app.post("/api/select-all-groups", (req, res) => {
   const u = req.user;
+  if(!adminOverrides(u.gid).allowDup) return res.status(403).json({ ok: false, error: "بخش فیش تکراری برای شما فعال نیست" });
   u.runtimeConfig.targetGroups = (u.groupsCache || []).map(g => ({ jid: g.jid, name: g.name || "" }));
   u.saveConfig(); u.broadcastState();
   res.json({ ok: true, count: u.runtimeConfig.targetGroups.length });
@@ -1930,6 +2021,7 @@ app.post("/api/select-all-groups", (req, res) => {
 
 app.post("/api/allowed-numbers", (req, res) => {
   const u = req.user;
+  if(!adminOverrides(u.gid).allowDup) return res.status(403).json({ ok: false, error: "بخش فیش تکراری برای شما فعال نیست" });
   u.runtimeConfig.allowedNumbers = (req.body.numbers || []).filter(n => /^\d+$/.test(n));
   u.saveConfig(); u.broadcastState();
   res.json({ ok: true });
@@ -1937,6 +2029,7 @@ app.post("/api/allowed-numbers", (req, res) => {
 
 app.post("/api/toggle", (req, res) => {
   const u = req.user;
+  if(!adminOverrides(u.gid).allowDup) return res.status(403).json({ ok: false, error: "بخش فیش تکراری برای شما فعال نیست" });
   u.runtimeConfig.enabled = !!req.body.enabled;
   u.saveConfig(); u.broadcastState();
   res.json({ ok: true });
@@ -1944,6 +2037,7 @@ app.post("/api/toggle", (req, res) => {
 
 app.post("/api/refresh-groups", async (req, res) => {
   const u = req.user;
+  if(!adminOverrides(u.gid).allowDup) return res.status(403).json({ ok: false, error: "بخش فیش تکراری برای شما فعال نیست" });
   try{ await u.fetchGroups(); res.json({ ok: true, groups: u.groupsCache }); }
   catch(e){ res.json({ ok: false, error: e.message }); }
 });
@@ -1954,6 +2048,7 @@ app.get("/api/confirm", (req, res) => res.json(req.user.confirmPublic()));
 
 app.post("/api/confirm/toggle", (req, res) => {
   const u = req.user;
+  if(!adminOverrides(u.gid).allowConfirm) return res.status(403).json({ ok: false, error: "بخش فیش به تأیید برای شما فعال نیست" });
   u.confirmCfg.enabled = !!req.body.enabled;
   u.saveConfirm(); u.broadcastState();
   res.json({ ok: true });
@@ -1961,6 +2056,7 @@ app.post("/api/confirm/toggle", (req, res) => {
 
 app.post("/api/confirm/owner", (req, res) => {
   const u = req.user;
+  if(!adminOverrides(u.gid).allowConfirm) return res.status(403).json({ ok: false, error: "بخش فیش به تأیید برای شما فعال نیست" });
   const { jid, name } = req.body;
   if(!jid || !jid.endsWith("@s.whatsapp.net")) return res.json({ ok: false, error: "شماره معتبر نیست" });
   u.confirmCfg.ownerJid = jid;
@@ -1971,6 +2067,7 @@ app.post("/api/confirm/owner", (req, res) => {
 
 app.post("/api/confirm/owner-clear", (req, res) => {
   const u = req.user;
+  if(!adminOverrides(u.gid).allowConfirm) return res.status(403).json({ ok: false, error: "بخش فیش به تأیید برای شما فعال نیست" });
   u.confirmCfg.ownerJid = null;
   u.confirmCfg.ownerName = "";
   u.saveConfirm(); u.broadcastState();
@@ -1979,6 +2076,7 @@ app.post("/api/confirm/owner-clear", (req, res) => {
 
 app.post("/api/confirm/select-group", (req, res) => {
   const u = req.user;
+  if(!adminOverrides(u.gid).allowConfirm) return res.status(403).json({ ok: false, error: "بخش فیش به تأیید برای شما فعال نیست" });
   const { jid, name } = req.body;
   if(!jid) return res.json({ ok: false, error: "jid لازم است" });
   const idx = u.confirmCfg.sourceGroups.findIndex(g => g.jid === jid);
@@ -1990,6 +2088,7 @@ app.post("/api/confirm/select-group", (req, res) => {
 
 app.post("/api/confirm/clear-groups", (req, res) => {
   const u = req.user;
+  if(!adminOverrides(u.gid).allowConfirm) return res.status(403).json({ ok: false, error: "بخش فیش به تأیید برای شما فعال نیست" });
   u.confirmCfg.sourceGroups = [];
   u.saveConfirm(); u.broadcastState();
   res.json({ ok: true });
@@ -1997,6 +2096,7 @@ app.post("/api/confirm/clear-groups", (req, res) => {
 
 app.post("/api/confirm/select-all-groups", (req, res) => {
   const u = req.user;
+  if(!adminOverrides(u.gid).allowConfirm) return res.status(403).json({ ok: false, error: "بخش فیش به تأیید برای شما فعال نیست" });
   u.confirmCfg.sourceGroups = (u.groupsCache || []).map(g => ({ jid: g.jid, name: g.name || "" }));
   u.saveConfirm(); u.broadcastState();
   res.json({ ok: true, count: u.confirmCfg.sourceGroups.length });
@@ -2004,6 +2104,7 @@ app.post("/api/confirm/select-all-groups", (req, res) => {
 
 app.post("/api/confirm/add-contact", (req, res) => {
   const u = req.user;
+  if(!adminOverrides(u.gid).allowConfirm) return res.status(403).json({ ok: false, error: "بخش فیش به تأیید برای شما فعال نیست" });
   let num = String(req.body.number || "").replace(/\D/g, "");
   if(!num) return res.json({ ok: false, error: "شماره لازم است" });
   if(num.startsWith("00")) num = num.slice(2);
