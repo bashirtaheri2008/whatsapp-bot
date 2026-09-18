@@ -1402,11 +1402,18 @@ class UserBot {
   }
 
   statePayload(){
+    /* v9.8.2: پنل وضعیت واقعی را می‌بیند — بخشِ قفل‌شده توسط مدیر = تیک خاموش
+       (وضعیت ذخیره‌شده کاربر دست‌نخورده می‌ماند؛ پس از آزادسازی همان وضعیت برمی‌گردد) */
+    const ov = adminOverrides(this.gid);
+    const cfg = Object.assign({}, this.runtimeConfig);
+    if(!ov.allowDup) cfg.enabled = false;
+    const confirm = this.confirmPublic();
+    if(!ov.allowConfirm) confirm.enabled = false;
     return {
       type: "state",
       state: this.connectionState, qr: this.currentQR, qrImage: this.currentQRImage, botNumber: this.botNumber,
-      groups: this.groupsCache, config: this.runtimeConfig,
-      confirm: this.confirmPublic(),
+      groups: this.groupsCache, config: cfg,
+      confirm: confirm,
       models: { text: TEXT_MODEL, vision: VISION_MODEL },
       keys: keyManager.power()
     };
@@ -2043,9 +2050,12 @@ app.post("/api/auth/logout", (req, res) => {
 
 app.get("/api/status", (req, res) => {
   const u = req.user;
+  const ov = adminOverrides(u.gid);
+  const cfg = Object.assign({}, u.runtimeConfig);
+  if(!ov.allowDup) cfg.enabled = false; /* نمایش وضعیت واقعی: بخش قفل = تیک خاموش */
   res.json({
     state: u.connectionState, qr: u.currentQR, qrImage: u.currentQRImage, botNumber: u.botNumber,
-    groups: u.groupsCache, config: u.runtimeConfig,
+    groups: u.groupsCache, config: cfg,
     models: { text: TEXT_MODEL, vision: VISION_MODEL },
     keys: keyManager.power(),
     queue: { pending: u.queue.length, busy: u.isProcessing }
