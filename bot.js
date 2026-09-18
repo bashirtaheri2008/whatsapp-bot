@@ -1769,7 +1769,8 @@ app.use(express.static(path.join(__dirname, "public")));
 const ADMIN_KEY = process.env.ADMIN_KEY || "hamgap-admin-2026";
 const ADMIN_FILE = path.join(DATA_ROOT, "admin.json");
 let adminState = { users: {} };
-function adminDefaults(){ return { allowDup: true, allowConfirm: true }; }
+/* کاربر تازه: هر دو بخش قفل تا مدیر از پنل فعال کند */
+function adminDefaults(){ return { allowDup: false, allowConfirm: false }; }
 function adminOverrides(gid){
   return Object.assign(adminDefaults(), (adminState.users && adminState.users[gid]) || {});
 }

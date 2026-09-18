@@ -995,7 +995,10 @@ function renderConnected(){
    ================================================== */
 async function apiPost(url, body){
   const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
-  return r.json();
+  const d = await r.json().catch(() => ({}));
+  /* اگر بخش قفل است، خطای سرور (مثلاً «برای شما فعال نیست») به کاربر نشان داده می‌شود */
+  if(!d.ok && d.error) toast(d.error);
+  return d;
 }
 
 function renderConfirm(){
@@ -1028,8 +1031,8 @@ function renderConfirm(){
       <button class="btn btn-secondary btn-block" id="ownerClearBtn">لغو انتخاب تأیید کننده</button>
     `;
     $("ownerClearBtn").addEventListener("click", async () => {
-      await apiPost("/api/confirm/owner-clear");
-      toast("تأیید کننده حذف شد");
+      const r = await apiPost("/api/confirm/owner-clear");
+      if(r.ok) toast("تأیید کننده حذف شد");
     });
   }else{
     ob.innerHTML = '<div class="empty"><span class="icon" data-lucide="users"></span><p>تأیید کننده انتخاب نشده</p><p class="hint">شماره موبایلش را در فیلد پایین وارد کن و «افزودن» را بزن</p></div>';
@@ -1100,16 +1103,16 @@ $("confirmDashToggle").addEventListener("click", async () => {
 });
 
 $("confirmClearGroups").addEventListener("click", async () => {
-  await apiPost("/api/confirm/clear-groups");
-  toast("گروه‌های تأیید پاک شدند");
+  const r = await apiPost("/api/confirm/clear-groups");
+  if(r.ok) toast("گروه‌های تأیید پاک شدند");
 });
 $("confirmSelectAllGroups").addEventListener("click", async () => {
   const r = await apiPost("/api/confirm/select-all-groups");
-  if(r.ok) toast("همه گروه‌ها برای تأیید انتخاب شدند"); else toast(r.error || "خطا");
+  if(r.ok) toast("همه گروه‌ها برای تأیید انتخاب شدند");
 });
 $("selectAllGroups").addEventListener("click", async () => {
   const r = await apiPost("/api/select-all-groups");
-  if(r.ok) toast("همه گروه‌ها انتخاب شدند"); else toast(r.error || "خطا");
+  if(r.ok) toast("همه گروه‌ها انتخاب شدند");
 });
 
 $("ownerAddBtn").addEventListener("click", async () => {
@@ -1120,8 +1123,6 @@ $("ownerAddBtn").addEventListener("click", async () => {
     await apiPost("/api/confirm/owner", { jid: r.jid, name: "" });
     $("ownerAddNumber").value = "";
     toast("تأیید کننده اضافه و انتخاب شد");
-  }else{
-    toast(r.error || "خطا");
   }
 });
 
@@ -1220,19 +1221,14 @@ function renderReceipts(){
    ACTIONS
    ================================================== */
 async function selectGroup(g){
-  const r = await fetch("/api/select-group", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({ jid: g.jid, name: g.name })
-  });
-  const d = await r.json();
-  toast(d.selected ? "فعال شد: " + g.name : "حذف شد: " + g.name);
+  const r = await apiPost("/api/select-group", { jid: g.jid, name: g.name });
+  if(r.ok) toast(r.selected ? "فعال شد: " + g.name : "حذف شد: " + g.name);
 }
 
 async function clearGroup(){
   if(!confirm("همه گروه‌ها لغو شوند؟")) return;
-  await fetch("/api/clear-group", { method: "POST" });
-  toast("همه گروه‌ها لغو شدند");
+  const r = await apiPost("/api/clear-group");
+  if(r.ok) toast("همه گروه‌ها لغو شدند");
 }
 
 async function refreshGroups(){
@@ -1241,8 +1237,8 @@ async function refreshGroups(){
   btn.innerHTML = '<span class="loader"><span></span><span></span><span></span></span>';
   btn.disabled = true;
   try{
-    await fetch("/api/refresh-groups", { method: "POST" });
-    toast("لیست گروه‌ها بروزرسانی شد");
+    const r = await apiPost("/api/refresh-groups");
+    if(r.ok) toast("لیست گروه‌ها بروزرسانی شد");
   }catch(e){ toast("خطا در بروزرسانی"); }
   btn.innerHTML = original;
   btn.disabled = false;
@@ -1263,12 +1259,8 @@ async function refreshReceipts(){
 }
 
 async function toggleBot(){
-  await fetch("/api/toggle", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({ enabled: !state.config.enabled })
-  });
-  toast(state.config.enabled ? "تشخیص فیش تکراری خاموش شد" : "تشخیص فیش تکراری روشن شد");
+  const r = await apiPost("/api/toggle", { enabled: !state.config.enabled });
+  if(r.ok) toast(state.config.enabled ? "تشخیص فیش تکراری خاموش شد" : "تشخیص فیش تکراری روشن شد");
 }
 
 function syncConfirmDashToggle(){
