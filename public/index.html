@@ -273,7 +273,9 @@ button,input{font-family:inherit}
 .group-item .avatar{
   width:38px;height:38px;border-radius:12px;background:var(--bg-2);
   display:flex;align-items:center;justify-content:center;font-size:14.5px;font-weight:700;color:var(--text-dim);flex-shrink:0;
+  position:relative;overflow:hidden;
 }
+.group-item .avatar img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:inherit}
 .group-item.selected .avatar{background:linear-gradient(150deg,var(--accent),var(--accent-2));color:var(--accent-ink)}
 .group-item .info{flex:1;min-width:0}
 .group-item .name{font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -1175,7 +1177,7 @@ function renderConnected(){
       el.className = "group-item" + (selected ? " selected" : "");
       const initials = (g.name || "?")[0];
       el.innerHTML = `
-        <div class="avatar">${escapeHtml(initials)}</div>
+        <div class="avatar">${escapeHtml(initials)}<img src="/api/group-pic?jid=${encodeURIComponent(g.jid)}" alt="" loading="lazy" onerror="this.remove()"></div>
         <div class="info">
           <div class="name">${escapeHtml(g.name)}</div>
           <div class="meta">${formatNumber(g.participants)} عضو</div>
@@ -1263,7 +1265,7 @@ function renderConfirm(){
         const sel = (c.verifierGroups || []).some(t => t.jid === g.jid);
         el.className = "group-item" + (sel ? " selected" : "");
         el.innerHTML = `
-          <div class="avatar">${escapeHtml((g.name || "?")[0])}</div>
+          <div class="avatar">${escapeHtml((g.name || "?")[0])}<img src="/api/group-pic?jid=${encodeURIComponent(g.jid)}" alt="" loading="lazy" onerror="this.remove()"></div>
           <div class="info">
             <div class="name">${escapeHtml(g.name)}</div>
             <div class="meta">${formatNumber(g.participants)} عضو</div>
@@ -1291,7 +1293,7 @@ function renderConfirm(){
       const selected = (c.sourceGroups || []).some(t => t.jid === g.jid);
       el.className = "group-item" + (selected ? " selected" : "");
       el.innerHTML = `
-        <div class="avatar">${escapeHtml((g.name || "?")[0])}</div>
+        <div class="avatar">${escapeHtml((g.name || "?")[0])}<img src="/api/group-pic?jid=${encodeURIComponent(g.jid)}" alt="" loading="lazy" onerror="this.remove()"></div>
         <div class="info">
           <div class="name">${escapeHtml(g.name)}</div>
           <div class="meta">${formatNumber(g.participants)} عضو</div>

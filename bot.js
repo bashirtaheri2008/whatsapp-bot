@@ -1,5 +1,5 @@
 /* ==================================================
-   WhatsApp AI Bot — نسخه چندکاربره (Multi-Tenant) v9.8.8 (گروه تأیید کننده) (ورود با نام کاربری/رمز)
+   WhatsApp AI Bot — نسخه چندکاربره (Multi-Tenant) v9.8.9 (گروه تأیید کننده + عکس نمایه گروه‌ها) (ورود با نام کاربری/رمز)
    هر کاربر با گوگل وارد می‌شود → حساب جدا → شماره واتساپ خودش
    دیتای هر کاربر (فیش/تنظیمات/نشست) کاملاً ایزوله است
    ================================================== */
@@ -1290,6 +1290,7 @@ class UserBot {
 
     this.sock = null;
     this.botJid = null;
+    this.picCache = {}; /* v9.8.9: کش عکس نمایه گروه‌ها — jid → {b64, ts} */
     this.botNumber = null;
     this.currentQR = null;
     this.currentQRImage = null;
@@ -2244,6 +2245,36 @@ app.get("/api/keys", async (req, res) => {
 });
 
 app.get("/api/receipts", (req, res) => res.json({ receipts: req.user.getReceiptsForPanel() }));
+
+/* v9.8.9: عکس نمایه گروه — با کش حافظه (۱۲ ساعت)؛ اگر عکس نبود 404 و پنل حرف اول را نشان می‌دهد */
+app.get("/api/group-pic", async (req, res) => {
+  const jid = String(req.query.jid || "");
+  if(!jid.endsWith("@g.us")) return res.status(400).end();
+  const u = req.user;
+  try{
+    const hit = u.picCache[jid];
+    if(hit && Date.now() - hit.ts < 12 * 3600 * 1000){
+      res.set("Content-Type", hit.ct || "image/jpeg");
+      res.set("Cache-Control", "private, max-age=43200");
+      return res.end(Buffer.from(hit.b64, "base64"));
+    }
+    if(!u.sock) return res.status(404).end();
+    if(typeof u.sock.profilePictureUrl !== "function") return res.status(404).end();
+    const url = await u.sock.profilePictureUrl(jid, "preview");
+    if(!url) return res.status(404).end();
+    const r = await fetch(url);
+    if(!r.ok) return res.status(404).end();
+    const ct = r.headers.get("content-type") || "image/jpeg";
+    if(!ct.startsWith("image/")) return res.status(404).end();
+    const buf = Buffer.from(await r.arrayBuffer());
+    u.picCache[jid] = { b64: buf.toString("base64"), ct, ts: Date.now() };
+    res.set("Content-Type", ct);
+    res.set("Cache-Control", "private, max-age=43200");
+    res.end(buf);
+  }catch(e){
+    res.status(404).end();
+  }
+});
 
 app.delete("/api/receipts/:id", (req, res) => {
   const u = req.user;
