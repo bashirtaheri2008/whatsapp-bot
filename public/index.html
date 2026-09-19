@@ -653,14 +653,6 @@ button,input{font-family:inherit}
 
       <div class="card">
         <div class="card-head">
-          <div class="ico-badge" data-lucide="key-round"></div>
-          <h2>قدرت هوش مصنوعی (AI)</h2>
-        </div>
-        <div id="keysList"></div>
-      </div>
-
-            <div class="card">
-        <div class="card-head">
           <div class="ico-badge" data-lucide="user-round"></div>
           <h2>حساب کاربری</h2>
         </div>
@@ -1245,6 +1237,7 @@ function renderStats(){
    ================================================== */
 function renderKeys(){
   const box = $("keysList");
+  if(!box) return;
   const k = state.keys || {};
   if(k.totalPower === undefined){
     box.innerHTML = '<div class="empty"><span class="icon" data-lucide="key-round"></span><p>در حال دریافت قدرت AI...</p></div>';
@@ -1467,4 +1460,4 @@ document.getElementById("accountLogoutBtn").addEventListener("click", async () =
 </script>
 
 </body>
-        </html>
+                                  </html>
