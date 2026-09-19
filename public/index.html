@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#0a0d0c">
+<meta name="theme-color" content="#f6f9f7">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="mobile-web-app-capable" content="yes">
@@ -13,42 +13,6 @@
 <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#0a0d0c;
-  --bg-1:#0e1310;
-  --bg-2:#131a17;
-  --bg-2-top:#161e1a;
-  --bg-3:#1a2420;
-  --bg-3-hover:#212f29;
-  --border:#243029;
-  --border-soft:#1a2420;
-  --accent:#22e08a;
-  --accent-2:#17c9e8;
-  --accent-dim:#189d5f;
-  --accent-ink:#02160c;
-  --accent-glow:rgba(34,224,138,.18);
-  --accent-glow-strong:rgba(34,224,138,.32);
-  --text:#f3f8f5;
-  --text-dim:#93a49b;
-  --text-faint:#59685f;
-  --danger:#f2596b;
-  --danger-soft:rgba(242,89,107,.14);
-  --warning:#f0b640;
-  --warning-soft:rgba(240,182,64,.14);
-  --info:#4fb3e8;
-  --info-soft:rgba(79,179,232,.14);
-  --r-xl:26px;
-  --r-lg:20px;
-  --r-md:14px;
-  --r-sm:10px;
-  --shadow-card:0 1px 0 rgba(255,255,255,.03) inset, 0 10px 30px -18px rgba(0,0,0,.6);
-  --shadow-pop:0 20px 50px -20px rgba(0,0,0,.65);
-  --glass-bg:rgba(11,16,14,.78);
-  --safe-top:env(safe-area-inset-top);
-  --safe-bottom:env(safe-area-inset-bottom);
-  --header-h:60px;
-  --nav-h:64px;
-}
-:root[data-theme="light"]{
   --bg:#f6f9f7;
   --bg-1:#eef2f0;
   --bg-2:#ffffff;
@@ -57,17 +21,54 @@
   --bg-3-hover:#e3ebe6;
   --border:#dbe4de;
   --border-soft:#e7eeea;
+  --accent:#22e08a;
+  --accent-2:#17c9e8;
+  --accent-dim:#189d5f;
+  --accent-ink:#02160c;
   --accent-glow:rgba(19,168,102,.13);
   --accent-glow-strong:rgba(19,168,102,.28);
   --text:#101715;
   --text-dim:#5c6b63;
   --text-faint:#8b9a92;
+  --danger:#f2596b;
   --danger-soft:rgba(224,60,80,.10);
+  --warning:#f0b640;
   --warning-soft:rgba(217,155,20,.12);
+  --info:#4fb3e8;
   --info-soft:rgba(45,146,201,.12);
+  --r-xl:26px;
+  --r-lg:20px;
+  --r-md:14px;
+  --r-sm:10px;
   --shadow-card:0 1px 0 rgba(255,255,255,.7) inset, 0 10px 26px -18px rgba(20,40,30,.16);
   --shadow-pop:0 20px 44px -20px rgba(20,40,30,.28);
   --glass-bg:rgba(255,255,255,.72);
+  --safe-top:env(safe-area-inset-top);
+  --safe-bottom:env(safe-area-inset-bottom);
+  --header-h:60px;
+  --nav-h:64px;
+}
+:root[data-theme="dark"]{
+  --bg:#0a0d0c;
+  --bg-1:#0e1310;
+  --bg-2:#131a17;
+  --bg-2-top:#161e1a;
+  --bg-3:#1a2420;
+  --bg-3-hover:#212f29;
+  --border:#243029;
+  --border-soft:#1a2420;
+  --accent-ink:#02160c;
+  --accent-glow:rgba(34,224,138,.18);
+  --accent-glow-strong:rgba(34,224,138,.32);
+  --text:#f3f8f5;
+  --text-dim:#93a49b;
+  --text-faint:#59685f;
+  --danger-soft:rgba(242,89,107,.14);
+  --warning-soft:rgba(240,182,64,.14);
+  --info-soft:rgba(79,179,232,.14);
+  --shadow-card:0 1px 0 rgba(255,255,255,.03) inset, 0 10px 30px -18px rgba(0,0,0,.6);
+  --shadow-pop:0 20px 50px -20px rgba(0,0,0,.65);
+  --glass-bg:rgba(11,16,14,.78);
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;overflow:hidden;overscroll-behavior:none;touch-action:manipulation}
@@ -591,11 +592,7 @@ button,input{font-family:inherit}
       <div class="card">
         <div class="card-head">
           <div class="ico-badge" data-lucide="target"></div>
-          <h2>ارسال فیش به تأیید کننده</h2>
-        </div>
-        <div class="toggle-row">
-          <div class="toggle-label">ویژگی فعال باشد<span class="sub">فیش گروه‌ها به تأیید کننده فوروارد می‌شود و ری‌اکشن او در گروه نمایش داده می‌شود</span></div>
-          <div class="toggle-switch" id="confirmToggle"></div>
+          <h2>این بخش چه می‌کند؟</h2>
         </div>
         <div class="confirm-flow">
           <div class="cf-step"><span class="icon" data-lucide="scan-line"></span>کاربر فیش می‌فرستد — ربات اسکن می‌کند</div>
@@ -739,8 +736,8 @@ function applyTheme(theme){
   if(meta) meta.setAttribute("content", theme === "light" ? "#f6f9f7" : "#0a0d0c");
 }
 function initTheme(){
-  let saved = "dark";
-  try{ saved = localStorage.getItem("panelTheme") || "dark"; }catch(e){}
+  let saved = "light";
+  try{ saved = localStorage.getItem("panelTheme") || "light"; }catch(e){}
   applyTheme(saved);
 }
 initTheme();
@@ -1106,8 +1103,6 @@ async function apiPost(url, body){
 
 function renderConfirm(){
   const c = state.confirm || {};
-  const ct = $("confirmToggle");
-  if(c.enabled) ct.classList.add("on"); else ct.classList.remove("on");
   syncConfirmDashToggle();
 
   /* بج ناوبری + وضعیت داشبورد */
@@ -1196,11 +1191,6 @@ function renderConfirm(){
   }
 }
 
-$("confirmToggle").addEventListener("click", async () => {
-  const to = !state.confirm.enabled;
-  const r = await apiPost("/api/confirm/toggle", { enabled: to });
-  if(r.ok) toast(to ? "ارسال به تأیید کننده روشن شد" : "ارسال به تأیید کننده خاموش شد");
-});
 $("confirmDashToggle").addEventListener("click", async () => {
   const to = !state.confirm.enabled;
   const r = await apiPost("/api/confirm/toggle", { enabled: to });
