@@ -828,6 +828,18 @@ function ghRateLimited(){
   return Date.now() < ghPausedUntil;
 }
 
+/* v9.9.2/v9.8.6: محافظ دیتا — اگر بوت با سهمیه‌ی گیت‌هابِ تموم‌شده بالا بیاید و
+   بازیابی شکست بخورد، هیچ پوشی انجام نمی‌شود تا دیتای خالی جای بکاپ واقعی را نگیرد.
+   با برگشتن سهمیه، خودکار رفع و بازیابی دوباره انجام می‌شود. */
+let cloudBlocked = false;
+async function ghQuotaOK(){
+  try{
+    const r = await fetch(GH_BASE + "/rate_limit", { headers: { Authorization: "token " + GH_TOKEN, Accept: "application/vnd.github+json", "User-Agent": "wa-bot-multiuser" } });
+    const d = await r.json();
+    return (d.resources && d.resources.core && d.resources.core.remaining > 100);
+  }catch(e){ return true; } /* اگر بررسی ممکن نشد، پوش آزاد می‌ماند */
+}
+
 async function ghApi(method, urlPath, body){
   try{
     const headers = {
@@ -903,7 +915,7 @@ let backupBusy = false;
 const lastBackupReqByUser = new Map();
 
 async function backupUser(gid, reason){
-  if(!cloudEnabled() || backupBusy || ghRateLimited()) return;
+  if(!cloudEnabled() || cloudBlocked || backupBusy || ghRateLimited()) return;
   const u = users.get(gid);
   if(!u) return;
   backupBusy = true;
@@ -954,7 +966,7 @@ function saveUserIndex(){
     fs.mkdirSync(USERS_DIR, { recursive: true });
     const local = path.join(USERS_DIR, "index.json");
     fs.writeFileSync(local, JSON.stringify({ users: idx }, null, 2));
-    if(cloudEnabled()){
+    if(cloudEnabled() && !cloudBlocked){
       let inCache = false;
       try{ inCache = pushedShaCache.get("users/index.json") === blobSha(local); }catch(e){}
       if(!inCache) ghPutFile("users/index.json", local).catch(() => {});
@@ -965,6 +977,12 @@ function saveUserIndex(){
 async function restoreAllFromGithub(){
   if(!cloudEnabled()){
     console.log("☁️ بکاپ ابری غیرفعال (GITHUB_TOKEN ست نشده)");
+    return;
+  }
+  /* v9.9.2: با سهمیه‌ی تمام‌شده بازیابی نمی‌کنیم و پوش را تا ریست می‌بندیم */
+  if(!(await ghQuotaOK())){
+    cloudBlocked = true;
+    console.log("⛔ سهمیه گیت‌هاب تمام است — بازیابی به تعویق افتاد و پوش مسدود شد (محافظ دیتا)");
     return;
   }
   try{
@@ -1044,7 +1062,16 @@ async function restoreAllFromGithub(){
 
 function startCloudTasks(){
   if(!cloudEnabled()) return;
-  setInterval(() => {
+  setInterval(async () => {
+    if(cloudBlocked){
+      if(await ghQuotaOK()){
+        cloudBlocked = false;
+        console.log("✅ سهمیه گیت‌هاب برگشت — محافظ دیتا برداشته شد");
+        if(users.size === 0){ await restoreAllFromGithub(); }
+      }else{
+        return; /* هنوز تمام — در این چرخه هیچ پوشی نمی‌شود */
+      }
+    }
     for(const gid of users.keys()) backupUser(gid, "خودکار");
   }, 15 * 60 * 1000);
   const extUrl = process.env.RENDER_EXTERNAL_URL;
@@ -1879,7 +1906,7 @@ function loadCredentials(){
 function saveCredentials(){
   try{
     fs.writeFileSync(CRED_FILE, JSON.stringify(credentials, null, 2));
-    if(cloudEnabled()) ghPutFile("credentials.json", CRED_FILE).catch(() => {});
+    if(cloudEnabled() && !cloudBlocked) ghPutFile("credentials.json", CRED_FILE).catch(() => {});
   }catch(e){ console.error("saveCredentials:", e.message); }
 }
 function hashPass(password, salt){
@@ -1922,7 +1949,7 @@ function saveAdmin(){
     fs.mkdirSync(DATA_ROOT, { recursive: true });
     fs.writeFileSync(ADMIN_FILE, JSON.stringify(adminState, null, 2));
   }catch(e){ console.error("saveAdmin:", e.message); }
-  if(cloudEnabled()) ghPutFile("admin.json", ADMIN_FILE).catch(() => {});
+  if(cloudEnabled() && !cloudBlocked) ghPutFile("admin.json", ADMIN_FILE).catch(() => {});
 }
 loadAdmin();
 
