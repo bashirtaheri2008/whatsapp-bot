@@ -1,5 +1,5 @@
 /* ==================================================
-   WhatsApp AI Bot — نسخه چندکاربره (Multi-Tenant) v9.0.0
+   WhatsApp AI Bot — نسخه چندکاربره (Multi-Tenant) v9.8.5 (ورود با نام کاربری/رمز)
    هر کاربر با گوگل وارد می‌شود → حساب جدا → شماره واتساپ خودش
    دیتای هر کاربر (فیش/تنظیمات/نشست) کاملاً ایزوله است
    ================================================== */
@@ -978,6 +978,11 @@ async function restoreAllFromGithub(){
       if(!fs.existsSync(ADMIN_FILE)) await ghGetFile("admin.json", ADMIN_FILE);
     }catch(e){}
     loadAdmin();
+    /* v9.8.5: بازیابی کاربران نام‌کاربری/رمز */
+    try{
+      if(!fs.existsSync(CRED_FILE)) await ghGetFile("credentials.json", CRED_FILE);
+    }catch(e){}
+    loadCredentials();
     /* فهرست کاربران */
     const idxLocal = path.join(USERS_DIR, "index.json");
     let index = null;
@@ -1863,6 +1868,33 @@ app.use(express.static(path.join(__dirname, "public")));
    ================================================== */
 const ADMIN_KEY = process.env.ADMIN_KEY || "hamgap-admin-2026";
 const ADMIN_FILE = path.join(DATA_ROOT, "admin.json");
+/* v9.8.5: کاربران نام‌کاربری/رمز (بدون گوگل) */
+const CRED_FILE = path.join(DATA_ROOT, "credentials.json");
+let credentials = { users: {} }; /* uname → { gid, salt, hash, name, createdAt } */
+function loadCredentials(){
+  try{
+    if(fs.existsSync(CRED_FILE)) credentials = JSON.parse(fs.readFileSync(CRED_FILE, "utf8"));
+  }catch(e){ console.error("loadCredentials:", e.message); }
+}
+function saveCredentials(){
+  try{
+    fs.writeFileSync(CRED_FILE, JSON.stringify(credentials, null, 2));
+    if(cloudEnabled()) ghPutFile("credentials.json", CRED_FILE).catch(() => {});
+  }catch(e){ console.error("saveCredentials:", e.message); }
+}
+function hashPass(password, salt){
+  return crypto.scryptSync(String(password), salt, 64).toString("hex");
+}
+function verifyCred(uname, password){
+  try{
+    const rec = credentials.users[uname];
+    if(!rec) return false;
+    const h = Buffer.from(hashPass(password, rec.salt), "hex");
+    const s = Buffer.from(rec.hash, "hex");
+    return h.length === s.length && crypto.timingSafeEqual(h, s);
+  }catch(e){ return false; }
+}
+const loginFails = new Map(); /* v9.8.5: uname → { count, until } — قفل ۱۰ دقیقه بعد از ۵ خطا */
 let adminState = { users: {}, defaults: { allowDup: false, allowConfirm: false } };
 /* کاربر تازه: هر دو بخش قفل تا مدیر از پنل فعال کند */
 /* v9.8.3: سیاست پیش‌فرض کاربران جدید — از پنل ادمین قابل تنظیم است */
@@ -1926,12 +1958,51 @@ app.get("/api/admin/users", (req, res) => {
       groups: (u.runtimeConfig.targetGroups || []).length,
       confirmEnabled: !!(u.confirmCfg && u.confirmCfg.enabled),
       allowDup: ov.allowDup, allowConfirm: ov.allowConfirm,
+      username: (credentials.users && Object.entries(credentials.users).find(([, c]) => c.gid === gid) || [])[0] || null,
       lastSeen: u.meta.lastSeen || null, createdAt: u.meta.createdAt || null
     });
   }
   list.sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0));
   res.json({ ok: true, users: list, total: list.length, connected, receiptsTotal, defaults: adminDefaults() });
 });
+/* v9.8.5: ساخت/ویرایش کاربر نام‌کاربری/رمز از پنل مدیریت */
+app.get("/api/admin/credentials", (req, res) => {
+  const list = Object.entries(credentials.users).map(([uname, rec]) => ({
+    username: uname, gid: rec.gid, name: rec.name || "", createdAt: rec.createdAt || null
+  }));
+  res.json({ ok: true, credentials: list });
+});
+app.post("/api/admin/credential", (req, res) => {
+  const uname = String((req.body || {}).username || "").trim().toLowerCase();
+  const password = String((req.body || {}).password || "");
+  const name = String((req.body || {}).name || "").trim();
+  if(!/^[a-z0-9_.]{3,24}$/.test(uname)){
+    return res.json({ ok: false, error: "نام کاربری: ۳ تا ۲۴ حرف انگلیسی کوچک، عدد، نقطه یا آندرلاین" });
+  }
+  if(password.length < 4){
+    return res.json({ ok: false, error: "رمز عبور حداقل ۴ کاراکتر باشد" });
+  }
+  const prev = credentials.users[uname];
+  const salt = crypto.randomBytes(16).toString("hex");
+  const gid = prev ? prev.gid : ("up_" + uname.replace(/[^a-z0-9_]/g, "") + "_" + crypto.randomBytes(2).toString("hex"));
+  credentials.users[uname] = {
+    gid, salt, hash: hashPass(password, salt),
+    name: name || (prev ? prev.name : ""), createdAt: prev ? (prev.createdAt || Date.now()) : Date.now()
+  };
+  saveCredentials();
+  /* ساخت فوری حساب ایزوله تا لاگین بی‌درنگ کار کند */
+  if(!users.get(gid)) ensureUser(gid, { name: name || uname, email: "" }).loadLocal();
+  console.log("🔑 کاربر نام‌کاربری ساخته/ویرایش شد:", uname);
+  res.json({ ok: true, username: uname, gid });
+});
+app.post("/api/admin/credential-delete", (req, res) => {
+  const uname = String((req.body || {}).username || "").trim().toLowerCase();
+  if(!credentials.users[uname]) return res.json({ ok: false, error: "چنین نام کاربری وجود ندارد" });
+  delete credentials.users[uname];
+  saveCredentials();
+  res.json({ ok: true });
+});
+
 app.post("/api/admin/defaults", (req, res) => {
   const cur = adminDefaults();
   adminState.defaults = {
@@ -2070,6 +2141,40 @@ app.get("/api/auth/me", (req, res) => {
 
 app.post("/api/auth/logout", (req, res) => {
   clearSessionCookie(res);
+  res.json({ ok: true });
+});
+
+/* v9.8.5: ورود با نام کاربری/رمز عبور (بدون گوگل) */
+app.post("/api/auth/login", (req, res) => {
+  const uname = String((req.body || {}).username || "").trim().toLowerCase();
+  const password = String((req.body || {}).password || "");
+  const rec = credentials.users[uname];
+  if(!rec){
+    return res.status(401).json({ ok: false, error: "نام کاربری یا رمز عبور نادرست است" });
+  }
+  const f = loginFails.get(uname);
+  if(f && f.until > Date.now()){
+    return res.status(429).json({ ok: false, error: "تلاش زیاد — چند دقیقه بعد دوباره امتحان کن" });
+  }
+  if(!verifyCred(uname, password)){
+    const c = ((f && f.count) || 0) + 1;
+    loginFails.set(uname, { count: c, until: c >= 5 ? Date.now() + 10 * 60000 : 0 });
+    return res.status(401).json({ ok: false, error: "نام کاربری یا رمز عبور نادرست است" });
+  }
+  loginFails.delete(uname);
+  /* کاربر همان‌طور که گوگل وصل می‌شود وصل می‌شود: حساب ایزوله + اتصال خودکار واتساپ */
+  let u = users.get(rec.gid);
+  if(!u){
+    u = ensureUser(rec.gid, { name: rec.name || uname, email: "" });
+    u.loadLocal();
+  }
+  if(!u.sock && !u.connecting){
+    if(activeBotCount() < MAX_CONCURRENT_BOTS || fs.existsSync(path.join(u.authDir, "creds.json"))){
+      u.connect().catch(e => console.error("اتصال کاربر پس از ورود:", e.message));
+    }
+  }
+  const secure = (req.headers["x-forwarded-proto"] === "https") || !!process.env.RENDER_EXTERNAL_URL;
+  setSessionCookie(res, rec.gid, secure);
   res.json({ ok: true });
 });
 
