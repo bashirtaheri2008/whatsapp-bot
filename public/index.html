@@ -675,6 +675,16 @@ button,input{font-family:inherit}
 
       <div class="card">
         <div class="card-head">
+          <div class="ico-badge" data-lucide="users-round"></div>
+          <h2>گروه‌های تأیید کننده</h2>
+          <button class="btn btn-secondary btn-sm" id="verifierClearBtn">لغو همه</button>
+        </div>
+        <div class="hint-line">به‌جای یک شماره، فیش‌ها به گروه(های) منتخب می‌روند — ری‌اکشن هر کس در آن گروه روی پیام اصلی اعمال می‌شود</div>
+        <div class="group-list" id="verifierGroupList"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
           <div class="ico-badge" data-lucide="target"></div>
           <h2>گروه‌های تأیید</h2>
           <button class="btn btn-secondary btn-sm" id="confirmSelectAllGroups">انتخاب همه</button>
@@ -1240,6 +1250,35 @@ function renderConfirm(){
     paintIcons(ob);
   }
 
+  /* v9.9.4: گروه‌های تأیید کننده */
+  const vgl = $("verifierGroupList");
+  if(vgl){
+    if(!state.groups.length){
+      vgl.innerHTML = '<div class="empty"><span class="icon" data-lucide="users"></span><p>گروهی پیدا نشد</p></div>';
+      paintIcons(vgl);
+    }else{
+      vgl.innerHTML = "";
+      state.groups.forEach(g => {
+        const el = document.createElement("div");
+        const sel = (c.verifierGroups || []).some(t => t.jid === g.jid);
+        el.className = "group-item" + (sel ? " selected" : "");
+        el.innerHTML = `
+          <div class="avatar">${escapeHtml((g.name || "?")[0])}</div>
+          <div class="info">
+            <div class="name">${escapeHtml(g.name)}</div>
+            <div class="meta">${formatNumber(g.participants)} عضو</div>
+          </div>
+          <span class="icon check" data-lucide="check"></span>
+        `;
+        el.addEventListener("click", async () => {
+          await apiPost("/api/confirm/verifier-group", { jid: g.jid, name: g.name });
+        });
+        vgl.appendChild(el);
+      });
+      paintIcons(vgl);
+    }
+  }
+
   /* گروه‌های تأیید */
   const gl = $("confirmGroupList");
   if(!state.groups.length){
@@ -1300,6 +1339,10 @@ $("confirmDashToggle").addEventListener("click", async () => {
   if(r.ok) toast(to ? "ارسال به تأیید کننده روشن شد" : "ارسال به تأیید کننده خاموش شد");
 });
 
+$("verifierClearBtn").addEventListener("click", async () => {
+  const r = await apiPost("/api/confirm/verifier-groups-clear");
+  if(r.ok) toast("گروه‌های تأیید کننده پاک شدند");
+});
 $("confirmClearGroups").addEventListener("click", async () => {
   const r = await apiPost("/api/confirm/clear-groups");
   if(r.ok) toast("گروه‌های تأیید پاک شدند");

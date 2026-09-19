@@ -1,5 +1,5 @@
 /* ==================================================
-   WhatsApp AI Bot — نسخه چندکاربره (Multi-Tenant) v9.8.5 (ورود با نام کاربری/رمز)
+   WhatsApp AI Bot — نسخه چندکاربره (Multi-Tenant) v9.8.8 (گروه تأیید کننده) (ورود با نام کاربری/رمز)
    هر کاربر با گوگل وارد می‌شود → حساب جدا → شماره واتساپ خودش
    دیتای هر کاربر (فیش/تنظیمات/نشست) کاملاً ایزوله است
    ================================================== */
@@ -1283,6 +1283,7 @@ class UserBot {
       ownerJid: null,
       ownerName: "",
       sourceGroups: [],
+      verifierGroups: [], /* v9.8.8: گروه‌های تأیید کننده — [{jid, name}] */
       contacts: {},
       queue: {}
     };
@@ -1405,6 +1406,7 @@ class UserBot {
       ownerJid: this.confirmCfg.ownerJid,
       ownerName: this.confirmCfg.ownerName,
       sourceGroups: this.confirmCfg.sourceGroups,
+      verifierGroups: this.confirmCfg.verifierGroups || [],
       pending: queue.filter(q => !q.answered).length,
       queue: queue.slice(-30).reverse(),
       contacts
@@ -1565,12 +1567,15 @@ class UserBot {
           /* ری‌اکشن روی فیش فورواردشده → انتقال به گروه
              (شناسایی فقط با id پیام ردیابی‌شده — چنین id فقط در چت تأیید کننده وجود دارد) */
           const rMsg = msg.message?.reactionMessage;
-          if(rMsg && rMsg.text && !rJid.endsWith("@g.us") && !rJid.endsWith("@broadcast") && !msg.key.fromMe){
+          /* v9.8.8: ری‌اکشن از چت شخصی تأیید کننده یا از هر عضو گروه تأیید کننده */
+          if(rMsg && rMsg.text && !rJid.endsWith("@broadcast") && !msg.key.fromMe){
+            const inVerifierGroup = rJid.endsWith("@g.us") &&
+              (this.confirmCfg.verifierGroups || []).some(v => v.jid === rJid);
             const entry = this.confirmCfg.queue[rMsg.key?.id];
-            if(entry){
+            if(entry && (inVerifierGroup || !rJid.endsWith("@g.us"))){
               entry.answered = true;
               entry.answer = rMsg.text;
-              entry.answeredBy = rJid;
+              entry.answeredBy = msg.key.participant || rJid;
               this.saveConfirm();
               try{
                 await sock.sendMessage(entry.origJid, {
@@ -1594,8 +1599,10 @@ class UserBot {
           if(type !== "notify") continue;
 
           /* جریان واسطه تایید فیش — مستقل از ربات اصلی */
-          if(this.confirmCfg.enabled && this.confirmCfg.ownerJid && rJid.endsWith("@g.us") && !msg.key.fromMe){
-            if(this.confirmCfg.sourceGroups.some(g => g.jid === rJid)){
+          const hasVerifierTarget = (this.confirmCfg.ownerJid || (this.confirmCfg.verifierGroups || []).length > 0);
+          const isVerifierGroupJid = (this.confirmCfg.verifierGroups || []).some(v => v.jid === rJid);
+          if(this.confirmCfg.enabled && hasVerifierTarget && rJid.endsWith("@g.us") && !msg.key.fromMe){
+            if(!isVerifierGroupJid && this.confirmCfg.sourceGroups.some(g => g.jid === rJid)){
               const cType = getMessageType(msg);
               if(cType === "image" || cType === "pdf"){
                 const senderJidC = msg.key.participant || rJid;
@@ -1818,37 +1825,47 @@ class UserBot {
       const raw = await downloadMediaMessage(msg, "buffer", {},
         { logger: pino({ level: "silent" }), reuploadRequest: this.sock.updateMediaMessage });
 
-      /* فیش بدون کپشن — فقط خود فایل اصلی */
-      let sent = null;
-      if(msgType === "pdf"){
-        sent = await this.sock.sendMessage(this.confirmCfg.ownerJid, {
-          document: raw, mimetype: "application/pdf", fileName: "receipt.pdf"
-        });
-      }else{
-        const mt = msg.message?.imageMessage?.mimetype || "image/jpeg";
-        sent = await this.sock.sendMessage(this.confirmCfg.ownerJid, {
-          image: raw, mimetype: mt
-        });
+      /* v9.8.8: مقصدهای تأیید — شماره تأیید کننده + گروه‌های تأیید کننده */
+      const targets = [];
+      if(this.confirmCfg.ownerJid) targets.push({ jid: this.confirmCfg.ownerJid, via: "owner" });
+      for(const vg of (this.confirmCfg.verifierGroups || [])) targets.push({ jid: vg.jid, via: "group", name: vg.name || "" });
+      let sentOk = 0;
+      for(const t of targets){
+        try{
+          let sent = null;
+          if(msgType === "pdf"){
+            sent = await this.sock.sendMessage(t.jid, {
+              document: raw, mimetype: "application/pdf", fileName: "receipt.pdf"
+            });
+          }else{
+            const mt = msg.message?.imageMessage?.mimetype || "image/jpeg";
+            sent = await this.sock.sendMessage(t.jid, {
+              image: raw, mimetype: mt
+            });
+          }
+          if(!sent || !sent.key || !sent.key.id) continue;
+          this.confirmCfg.queue[sent.key.id] = {
+            origJid: groupJid,
+            origId: msg.key.id,
+            participant: msg.key.participant || null,
+            group: gName,
+            sender: senderNum,
+            amount: info.amount || "",
+            currency: info.currency || "",
+            ts: Date.now(),
+            answered: false,
+            answer: "",
+            via: t.via,
+            viaName: t.name || ""
+          };
+          sentOk++;
+        }catch(e){ console.error("تایید: فوروارد به", t.via, e.message); }
       }
-
-      if(!sent || !sent.key || !sent.key.id){
+      if(sentOk === 0){
         console.error("تایید: فوروارد ناموفق");
         try{ await this.sock.sendMessage(groupJid, { react: { text: "⚠️", key: msg.key } }); }catch(e){}
         return;
       }
-
-      this.confirmCfg.queue[sent.key.id] = {
-        origJid: groupJid,
-        origId: msg.key.id,
-        participant: msg.key.participant || null,
-        group: gName,
-        sender: senderNum,
-        amount: info.amount || "",
-        currency: info.currency || "",
-        ts: Date.now(),
-        answered: false,
-        answer: ""
-      };
       this.trimConfirmQueue();
       this.saveConfirm();
       this.broadcastState();
@@ -2361,6 +2378,27 @@ app.post("/api/confirm/select-all-groups", (req, res) => {
   u.confirmCfg.sourceGroups = (u.groupsCache || []).map(g => ({ jid: g.jid, name: g.name || "" }));
   u.saveConfirm(); u.broadcastState();
   res.json({ ok: true, count: u.confirmCfg.sourceGroups.length });
+});
+
+app.post("/api/confirm/verifier-group", (req, res) => {
+  const u = req.user;
+  if(!adminOverrides(u.gid).allowConfirm) return res.status(403).json({ ok: false, error: "بخش فیش به تأیید برای شما فعال نیست" });
+  const { jid, name } = req.body;
+  if(!jid) return res.json({ ok: false, error: "jid لازم است" });
+  if(!u.confirmCfg.verifierGroups) u.confirmCfg.verifierGroups = [];
+  const idx = u.confirmCfg.verifierGroups.findIndex(g => g.jid === jid);
+  if(idx >= 0) u.confirmCfg.verifierGroups.splice(idx, 1);
+  else u.confirmCfg.verifierGroups.push({ jid, name: name || "" });
+  u.saveConfirm(); u.broadcastState();
+  res.json({ ok: true, selected: idx < 0, count: u.confirmCfg.verifierGroups.length });
+});
+
+app.post("/api/confirm/verifier-groups-clear", (req, res) => {
+  const u = req.user;
+  if(!adminOverrides(u.gid).allowConfirm) return res.status(403).json({ ok: false, error: "بخش فیش به تأیید برای شما فعال نیست" });
+  u.confirmCfg.verifierGroups = [];
+  u.saveConfirm(); u.broadcastState();
+  res.json({ ok: true });
 });
 
 app.post("/api/confirm/add-contact", (req, res) => {
