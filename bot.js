@@ -1382,7 +1382,9 @@ function setSessionCookie(res, gid, secure){
 }
 
 function clearSessionCookie(res){
-  res.setHeader("Set-Cookie", SESSION_COOKIE + "=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0");
+  const secure = true; /* روی ریندر همیشه HTTPS */
+  res.setHeader("Set-Cookie",
+    SESSION_COOKIE + "=; Path=/; HttpOnly; SameSite=" + (secure ? "None; Secure" : "Lax") + "; Max-Age=0");
 }
 
 /* ساخت redirect_uri از روی هاست درخواست (Render همیشه https است) */
