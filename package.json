@@ -1,6 +1,6 @@
 {
-  "name": "wa-bot",
-  "version": "9.0.0",
+  "name": "sarafi-bot",
+  "version": "10.0.0",
   "description": "WhatsApp AI Bot - multi-user with Google login",
   "main": "bot.js",
   "scripts": {

@@ -105,7 +105,8 @@ const VISION_PRIORITY = [
 
 const MAX_IMAGE_SIZE = 4 * 1024 * 1024;
 const MAX_PDF_SIZE = 10 * 1024 * 1024;
-const MAX_CONCURRENT_BOTS = 5;
+/* v10.0.0: موقتاً بالا — بعداً با پلن‌ها محدود می‌شود */
+const MAX_CONCURRENT_BOTS = 20;
 
 const QUEUE_DELAY_MS = 500;
 const IMAGE_MAX_DIMENSION = 1400;
@@ -1179,8 +1180,10 @@ async function restoreAllFromGithub(){
       try{
         const gid = item.gid;
         if(!gid || !/^[A-Za-z0-9_\-]{5,}$/.test(gid)) continue;
+        /* v10.0.0: سیاست ادمین با حساب (gid پایه) گره می‌خورد، نه با هر شماره */
+        const _adminKey = parseSlotKey(gid).gid;
         /* v9.8.3: کاربران موجود ثبت/قفل می‌شوند تا سیاست سراسری جدید اثری بر آن‌ها نداشته باشد */
-        if(!adminState.users[gid]) adminState.users[gid] = adminDefaults();
+        if(!adminState.users[_adminKey]) adminState.users[_adminKey] = adminDefaults();
         const u = ensureUser(gid, { email: item.email || "" }, true); /* deferSave: پروفایل خالی نوشته نشود */
         if(cloudDir){
           /* v9.9.3: بازیابی فله — همه فایل‌ها از tarball محلی کپی می‌شوند (صفر درخواست API) */
@@ -1294,6 +1297,35 @@ process.on("SIGTERM", () => {
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || "";
 const SESSION_COOKIE = "wasid";
+/* v10.0.0: چندشماره‌ای — اسلات. کوکی «waslot» شماره فعال مرورگر را نگه می‌دارد.
+   اسلات ۱ = همان کاربر قدیمی (کاملاً سازگار با دیتای موجود)؛ اسلات‌های بعدی: gid--N */
+const SLOT_COOKIE = "waslot";
+const SLOT_SEP = "--";
+function slotKey(gid, slot){ return (slot && slot > 1) ? gid + SLOT_SEP + slot : gid; }
+function parseSlotKey(key){
+  key = String(key || "");
+  const i = key.indexOf(SLOT_SEP);
+  if(i === -1) return { gid: key, slot: 1 };
+  const base = key.slice(0, i);
+  const num = key.slice(i + SLOT_SEP.length);
+  return (/^\d+$/.test(num) && num.length <= 2) ? { gid: base, slot: parseInt(num, 10) } : { gid: key, slot: 1 };
+}
+function sessionSlot(req){
+  const c = parseCookies(req);
+  const n = parseInt(c[SLOT_COOKIE] || "1", 10);
+  return (n >= 1 && n <= 99) ? n : 1;
+}
+/* append تا با کوکی سشن (setHeader) تداخل نکند */
+function setSlotCookie(res, slot, secure){
+  res.append("Set-Cookie",
+    SLOT_COOKIE + "=" + slot +
+    "; Path=/; SameSite=" + (secure ? "None; Secure" : "Lax") + "; Max-Age=" + Math.floor(30 * 24 * 3600));
+}
+/* اسلات مؤثر: اگر کوکی به اسلات حذف‌شده اشاره کند → اسلات ۱ */
+function effSlot(gid, slot){
+  if(slot > 1 && !fs.existsSync(path.join(USERS_DIR, slotKey(gid, slot)))) return 1;
+  return slot;
+}
 const SESSION_MAX_AGE = 30 * 24 * 3600 * 1000; /* ۳۰ روز */
 
 let SESSION_SECRET = "";
@@ -1423,13 +1455,26 @@ function ensureUser(gid, profile, deferSave){
     u.meta.lastSeen = Date.now();
     return u;
   }
+  /* v10.0.0: اسلات‌های دوم به بعد پروفایل را از کاربر پایه به ارث می‌برند */
+  const _ps = parseSlotKey(gid);
+  if(_ps.slot > 1){
+    let prof = users.get(_ps.gid);
+    let pm = prof ? prof.meta : null;
+    if(!pm){
+      try{ pm = JSON.parse(fs.readFileSync(path.join(USERS_DIR, _ps.gid, "meta.json"), "utf8")); }catch(e){ pm = null; }
+    }
+    if(pm) profile = { email: pm.email || "", name: pm.name || "", picture: pm.picture || "" };
+  }
   u = new UserBot(gid, profile || {});
   users.set(gid, u);
   u.meta.lastSeen = Date.now();
+  u.meta.slot = _ps.slot;
+  /* v10.0.0: سیاست ادمین برای همه اسلات‌ها یکی است — کلید = gid پایه */
+  const _adminKey = _ps.gid;
   /* v9.8.3: کاربر تازه‌وارد سیاست لحظه ثبت را به عنوان وضعیت اختصاصی خودش می‌گیرد؛
      تغییرهای بعدی سیاست سراسری فقط بر کاربرانِ آینده اثر می‌گذارد */
-  if(!adminState.users[gid]){
-    adminState.users[gid] = adminDefaults();
+  if(!adminState.users[_adminKey]){
+    adminState.users[_adminKey] = adminDefaults();
     saveAdmin();
   }
   if(deferSave){
@@ -2145,6 +2190,8 @@ function adminDefaults(){
   return { allowDup: !!d.allowDup, allowConfirm: !!d.allowConfirm };
 }
 function adminOverrides(gid){
+  /* v10.0.0: سیاست برای همه شماره‌های یک حساب یکی است */
+  gid = parseSlotKey(gid).gid;
   return Object.assign(adminDefaults(), (adminState.users && adminState.users[gid]) || {});
 }
 function loadAdmin(){
@@ -2193,7 +2240,7 @@ app.get("/api/admin/users", (req, res) => {
     receiptsTotal += rc;
     const ov = adminOverrides(gid);
     list.push({
-      gid, email: u.meta.email || "", name: u.meta.name || "", picture: u.meta.picture || "",
+      gid, slot: parseSlotKey(gid).slot, email: u.meta.email || "", name: u.meta.name || "", picture: u.meta.picture || "",
       connected: u.connectionState === "connected", state: u.connectionState,
       botNumber: u.botNumber || null,
       receipts: rc,
@@ -2303,10 +2350,15 @@ app.use("/api", (req, res, next) => {
   if(req.path.startsWith("/auth/") || req.path === "/health" || req.path.startsWith("/admin/")) return next();
   const gid = sessionGid(req);
   if(!gid) return res.status(401).json({ error: "unauthorized" });
+  /* v10.0.0: کاربر فعال = حساب + اسلات (شماره واتساپ انتخابی) */
+  const slot = effSlot(gid, sessionSlot(req));
+  const key = slotKey(gid, slot);
   /* کوکی امضاشده = خودمان صادرش کرده‌ایم؛ اگر کاربر هنوز ثبت نشده، ساخته می‌شود */
-  let u = getUser(gid);
-  if(!u) u = ensureUser(gid, {});
+  let u = getUser(key);
+  if(!u) u = ensureUser(key, {});
   req.user = u;
+  req.accountGid = gid;
+  req.slot = slot;
   next();
 });
 
@@ -2697,6 +2749,109 @@ app.post("/api/confirm/add-contact", (req, res) => {
   res.json({ ok: true, jid });
 });
 
+/* ---------- v10.0.0: چندشماره‌ای (اسلات‌ها) ---------- */
+
+function listSlots(gid){
+  const esc = String(gid).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const rx = new RegExp("^" + esc + SLOT_SEP + "(\\d{1,2})$");
+  const slots = [];
+  const add = (slot) => {
+    const key = slotKey(gid, slot);
+    const u = users.get(key) || null;
+    const hasCreds = fs.existsSync(path.join(USERS_DIR, key, "auth_info", "creds.json"));
+    slots.push({
+      slot,
+      phone: u ? (u.botNumber || null) : null,
+      state: u ? u.connectionState : "disconnected",
+      hasCreds,
+      exists: fs.existsSync(path.join(USERS_DIR, key)) || !!u
+    });
+  };
+  add(1);
+  let max = 1;
+  try{
+    for(const name of fs.readdirSync(USERS_DIR)){
+      const m = name.match(rx);
+      if(m){
+        const n = parseInt(m[1], 10);
+        if(n >= 2 && n <= 99 && !slots.some(s => s.slot === n)){
+          add(n);
+          if(n > max) max = n;
+        }
+      }
+    }
+  }catch(e){}
+  /* اسلات‌های فقط-در-حافظه (تازه ساخته شده و هنوز فایلی ندارد) */
+  for(const [key, u] of users.entries()){
+    const ps = parseSlotKey(key);
+    if(ps.gid === gid && ps.slot >= 2 && !slots.some(s => s.slot === ps.slot)){
+      add(ps.slot);
+      if(ps.slot > max) max = ps.slot;
+    }
+  }
+  slots.sort((a, b) => a.slot - b.slot);
+  return { slots, nextSlot: Math.min(max + 1, 99) };
+}
+
+app.get("/api/slots", (req, res) => {
+  const gid = parseSlotKey(req.user.gid).gid;
+  res.json(Object.assign({ ok: true, active: req.slot || 1 }, listSlots(gid)));
+});
+
+/* سوییچ بین شماره‌ها — کوکی اسلات عوض می‌شود، همه APIها از این پس مال شماره جدید‌اند */
+app.post("/api/slot", (req, res) => {
+  const gid = parseSlotKey(req.user.gid).gid;
+  const slot = parseInt((req.body || {}).slot, 10);
+  if(!(slot >= 1) || slot > 99) return res.status(400).json({ ok: false, error: "شماره اسلات نامعتبر است" });
+  if(slot > 1 && !fs.existsSync(path.join(USERS_DIR, slotKey(gid, slot)))){
+    return res.status(404).json({ ok: false, error: "این شماره وجود ندارد" });
+  }
+  const secure = (req.headers["x-forwarded-proto"] === "https") || !!process.env.RENDER_EXTERNAL_URL;
+  setSlotCookie(res, slot, secure);
+  res.json({ ok: true, slot });
+});
+
+/* افزودن شماره جدید — اسلات بعدی ساخته و فعال می‌شود؛ QR از همان جریان همیشگی می‌آید */
+app.post("/api/slot/add", (req, res) => {
+  const gid = parseSlotKey(req.user.gid).gid;
+  const { nextSlot } = listSlots(gid);
+  if(nextSlot >= 99) return res.status(400).json({ ok: false, error: "حداکثر تعداد شماره رسیده است" });
+  const key = slotKey(gid, nextSlot);
+  const u = ensureUser(key, {});
+  u.loadLocal();
+  const secure = (req.headers["x-forwarded-proto"] === "https") || !!process.env.RENDER_EXTERNAL_URL;
+  setSlotCookie(res, nextSlot, secure);
+  saveUserIndex();
+  console.log("📱 شماره جدید (اسلات " + nextSlot + ") برای " + gid.slice(0, 12));
+  res.json({ ok: true, slot: nextSlot });
+});
+
+/* حذف شماره (فقط اسلات‌های دوم به بعد) */
+app.post("/api/slot/remove", async (req, res) => {
+  const gid = parseSlotKey(req.user.gid).gid;
+  const slot = parseInt((req.body || {}).slot, 10);
+  if(!(slot >= 2) || slot > 99) return res.status(400).json({ ok: false, error: "شماره اصلی قابل حذف نیست — از «خروج از اکانت واتساپ» استفاده کن" });
+  const key = slotKey(gid, slot);
+  const u = users.get(key);
+  try{
+    if(u){
+      if(u.sock){ try{ await u.sock.logout(); }catch(e){} try{ u.sock.end(undefined); }catch(e){} }
+      u.sock = null;
+      users.delete(key);
+    }
+  }catch(e){}
+  try{ fs.rmSync(path.join(USERS_DIR, key), { recursive: true, force: true }); }catch(e){}
+  /* sha cache این اسلات باطل شود */
+  for(const k of pushedShaCache.keys()){
+    if(k.startsWith("users/" + key + "/")) pushedShaCache.delete(k);
+  }
+  const secure = (req.headers["x-forwarded-proto"] === "https") || !!process.env.RENDER_EXTERNAL_URL;
+  if((req.slot || 1) === slot) setSlotCookie(res, 1, secure);
+  saveUserIndex();
+  console.log("🗑️ شماره (اسلات " + slot + ") حذف شد — " + gid.slice(0, 12));
+  res.json({ ok: true });
+});
+
 /* ---------- WHATSAPP CONNECTION ---------- */
 
 /* شروع اتصال (برای کاربر تازه‌وارد که هنوز باتش وصل نیست) */
@@ -2734,7 +2889,8 @@ function heartbeat(){
 wss.on("connection", (ws, req) => {
   try{
     const gid = sessionGid(req);
-    const u = gid ? getUser(gid) : null;
+    /* v10.0.0: جریان وضعیت مال اسلات فعال است */
+    const u = gid ? getUser(slotKey(gid, effSlot(gid, sessionSlot(req)))) : null;
     if(!u){
       ws.close(4001, "unauthorized");
       return;
@@ -2786,7 +2942,7 @@ setInterval(() => {
   server.listen(PORT, () => {
     console.log("");
     console.log("🌐 پنل وب: http://localhost:" + PORT);
-    console.log("🤖 نسخه چندکاربره v9.0.0 — ورود با گوگل");
+    console.log("🤖 نسخه چندکاربره v10.0.0 — چندشماره‌ای (اسلات)");
     console.log("🔑 OAuth گوگل:", googleOAuthConfigured() ? "فعال" : "❌ تنظیم نشده");
     console.log("💾 حداکثر بات هم‌زمان:", MAX_CONCURRENT_BOTS);
     console.log("🎯 تشخیص تکراری سخت‌گیرانه (Strict)");
