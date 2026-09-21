@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0a0f0d">
+<title>پنل مدیریت — سیستم ۲</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/lucide@latest/dist/umd/lucide.min.js"></script>
+<style>
+:root{
+  --bg:#0a0f0d; --bg2:#0f1714; --card:#141f1b; --card2:#1a2822; --line:#24352e;
+  --tx:#e8f2ed; --tx2:#9db4aa; --tx3:#6b8378;
+  --green:#22c55e; --green-d:#16a34a; --red:#ef4444; --red-d:#dc2626;
+  --amber:#f59e0b; --blue:#3b82f6; --purple:#a78bfa;
+  --r:14px; --r-s:9px;
+}
+[data-theme="light"]{
+  --bg:#f2f6f4; --bg2:#e8efec; --card:#ffffff; --card2:#f4f8f6; --line:#dde7e1;
+  --tx:#17251f; --tx2:#4c6157; --tx3:#7d938a;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{font-family:'Vazirmatn',sans-serif;background:var(--bg);color:var(--tx);font-size:14px;overflow-x:hidden}
+body::before{content:"";position:fixed;inset:0;background:radial-gradient(900px 500px at 85% -10%,rgba(34,197,94,.08),transparent),radial-gradient(700px 400px at 10% 110%,rgba(59,130,246,.05),transparent);pointer-events:none;z-index:0}
+.wrap{position:relative;z-index:1;max-width:1100px;margin:0 auto;padding:16px 14px calc(90px + env(safe-area-inset-bottom))}
+
+/* ===== LOCK ===== */
+#lock{position:fixed;inset:0;z-index:60;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:20px}
+#lock.hidden{display:none}
+.lock-card{width:100%;max-width:380px;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:30px 26px;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.35)}
+.lock-logo{width:64px;height:64px;border-radius:18px;background:linear-gradient(135deg,#22c55e,#15803d);display:flex;align-items:center;justify-content:center;margin:0 auto 14px;color:#fff}
+.lock-card h1{font-size:17px;font-weight:800;margin-bottom:4px}
+.lock-card .sub{color:var(--tx2);font-size:12px;margin-bottom:22px;line-height:1.8}
+.field{width:100%;background:var(--bg2);border:1.5px solid var(--line);border-radius:var(--r-s);padding:12px 14px;color:var(--tx);font-family:inherit;font-size:14px;outline:none;transition:border .2s;direction:ltr;text-align:left}
+.field:focus{border-color:var(--green)}
+.field::placeholder{color:var(--tx3)}
+label.lbl{display:block;font-size:12px;color:var(--tx2);margin:0 4px 6px;font-weight:500}
+.lock-err{color:var(--red);font-size:12px;margin-top:10px;min-height:18px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:none;border-radius:var(--r-s);padding:12px 18px;font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer;transition:.15s;color:#fff;background:var(--green-d)}
+.btn:active{transform:scale(.97)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.full{width:100%}
+.btn.sec{background:var(--card2);color:var(--tx);border:1px solid var(--line)}
+.btn.dan{background:var(--red-d)}
+.btn.gh{background:transparent;color:var(--tx2);border:1px solid var(--line)}
+
+/* ===== TOPBAR ===== */
+.topbar{display:flex;align-items:center;gap:10px;margin-bottom:18px}
+.brand{display:flex;align-items:center;gap:11px;flex:1;min-width:0}
+.brand .logo{width:42px;height:42px;border-radius:13px;background:linear-gradient(135deg,#22c55e,#15803d);display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0}
+.brand h1{font-size:15.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brand .meta{font-size:11px;color:var(--tx3);direction:ltr;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.iconbtn{width:38px;height:38px;border-radius:11px;background:var(--card);border:1px solid var(--line);color:var(--tx2);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:.15s}
+.iconbtn:active{transform:scale(.93)}
+.iconbtn .icon{width:18px;height:18px}
+
+/* ===== STATS ===== */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+@media(max-width:640px){.stats{grid-template-columns:repeat(2,1fr)}}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px;position:relative;overflow:hidden}
+.stat .v{font-size:21px;font-weight:800;margin-bottom:2px}
+.stat .l{font-size:11px;color:var(--tx2)}
+.stat .ic{position:absolute;top:12px;left:12px;width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center}
+.stat .ic .icon{width:16px;height:16px}
+.ic.g{background:rgba(34,197,94,.13);color:var(--green)}
+.ic.b{background:rgba(59,130,246,.13);color:var(--blue)}
+.ic.a{background:rgba(245,158,11,.13);color:var(--amber)}
+.ic.p{background:rgba(167,139,250,.13);color:var(--purple)}
+
+/* ===== SECTIONS / CARDS ===== */
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);margin-bottom:14px;overflow:hidden}
+.card-h{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.card-h .icon{width:18px;height:18px;color:var(--green)}
+.card-h h2{font-size:13.5px;font-weight:700;flex:1}
+.card-h .hint{font-size:11px;color:var(--tx3)}
+.card-b{padding:14px 16px}
+.row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px dashed var(--line)}
+.row:last-child{border-bottom:none;padding-bottom:2px}
+.row .rl{flex:1;min-width:0}
+.row .rl .t{font-size:13px;font-weight:600}
+.row .rl .d{font-size:11px;color:var(--tx2);margin-top:2px;line-height:1.6}
+
+/* ===== SWITCH ===== */
+.sw{position:relative;width:44px;height:25px;flex-shrink:0;cursor:pointer}
+.sw input{display:none}
+.sw .tr{position:absolute;inset:0;background:var(--bg2);border:1.5px solid var(--line);border-radius:20px;transition:.2s}
+.sw .tr::after{content:"";position:absolute;top:2.5px;right:2.5px;width:17px;height:17px;border-radius:50%;background:var(--tx3);transition:.2s}
+.sw input:checked + .tr{background:var(--green-d);border-color:var(--green-d)}
+.sw input:checked + .tr::after{background:#fff;transform:translateX(-19px)}
+
+/* ===== TABS ===== */
+.tabs{display:flex;gap:8px;margin-bottom:16px;background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:5px}
+.tab{flex:1;padding:10px 6px;border-radius:10px;text-align:center;font-size:12.5px;font-weight:600;color:var(--tx2);cursor:pointer;transition:.15s;display:flex;align-items:center;justify-content:center;gap:6px}
+.tab .icon{width:15px;height:15px}
+.tab.on{background:var(--green-d);color:#fff}
+.tab .cnt{background:rgba(255,255,255,.18);border-radius:8px;font-size:10px;padding:1px 7px}
+
+/* ===== SEARCH ===== */
+.search{display:flex;gap:8px;margin-bottom:12px}
+.search .field{flex:1}
+
+/* ===== USERS ===== */
+.user{display:flex;gap:12px;padding:14px 16px;border-bottom:1px solid var(--line);transition:background .15s}
+.user:last-child{border-bottom:none}
+.user:active{background:var(--card2)}
+.av{width:46px;height:46px;border-radius:14px;background:var(--card2);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;color:var(--tx2);flex-shrink:0;overflow:hidden;position:relative}
+.av img{width:100%;height:100%;object-fit:cover}
+.uinfo{flex:1;min-width:0}
+.uinfo .nm{font-size:13.5px;font-weight:700;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.uinfo .em{font-size:11px;color:var(--tx2);direction:ltr;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chips{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}
+.chip{font-size:10px;padding:2.5px 8px;border-radius:7px;background:var(--card2);color:var(--tx2);border:1px solid var(--line)}
+.chip.g{background:rgba(34,197,94,.1);color:var(--green);border-color:rgba(34,197,94,.25)}
+.chip.r{background:rgba(239,68,68,.08);color:var(--red);border-color:rgba(239,68,68,.2)}
+.chip.a{background:rgba(245,158,11,.1);color:var(--amber);border-color:rgba(245,158,11,.25)}
+.chip.b{background:rgba(59,130,246,.1);color:var(--blue);border-color:rgba(59,130,246,.25)}
+.dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.dot.g{background:var(--green);box-shadow:0 0 8px rgba(34,197,94,.6)}
+.dot.a{background:var(--amber);box-shadow:0 0 8px rgba(245,158,11,.6);animation:pulse 1.2s infinite}
+.dot.r{background:var(--red)}
+.dot.gr{background:var(--tx3)}
+@keyframes pulse{50%{opacity:.4}}
+.ubtns{display:flex;flex-direction:column;gap:6px;justify-content:center;flex-shrink:0}
+.mini{border:1px solid var(--line);background:var(--bg2);color:var(--tx2);border-radius:8px;padding:6px 9px;font-size:10.5px;font-family:inherit;cursor:pointer;display:flex;align-items:center;gap:5px;white-space:nowrap}
+.mini .icon{width:13px;height:13px}
+.mini.on{color:var(--green);border-color:rgba(34,197,94,.35);background:rgba(34,197,94,.08)}
+.mini.off{color:var(--red);border-color:rgba(239,68,68,.3);background:rgba(239,68,68,.06)}
+
+/* ===== MODAL ===== */
+#modal{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.6);display:none;align-items:flex-end;justify-content:center;backdrop-filter:blur(3px)}
+#modal.show{display:flex}
+.mcard{width:100%;max-width:480px;background:var(--card);border:1px solid var(--line);border-radius:22px 22px 0 0;max-height:88vh;overflow-y:auto;padding:20px;animation:up .22s}
+@keyframes up{from{transform:translateY(40px);opacity:0}}
+@media(min-width:560px){#modal{align-items:center}.mcard{border-radius:22px}}
+.mcard h3{font-size:15px;font-weight:800;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.mcard h3 .icon{width:17px;height:17px;color:var(--green)}
+.mrow{margin-bottom:13px}
+.mfoot{display:flex;gap:8px;margin-top:20px}
+.mfoot .btn{flex:1}
+.modal-x{margin:-6px -6px 10px auto;width:32px;height:32px;border-radius:10px;background:var(--bg2);border:1px solid var(--line);color:var(--tx2);display:flex;align-items:center;justify-content:center;cursor:pointer}
+
+/* ===== TOAST ===== */
+#toasts{position:fixed;bottom:calc(18px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);z-index:70;display:flex;flex-direction:column;gap:8px;width:min(92%,360px)}
+.toast{background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:11px 14px;font-size:12.5px;display:flex;align-items:center;gap:9px;box-shadow:0 10px 30px rgba(0,0,0,.35);animation:up .25s;color:var(--tx)}
+.toast .icon{width:16px;height:16px;flex-shrink:0}
+.toast.g{border-color:rgba(34,197,94,.4)}.toast.g .icon{color:var(--green)}
+.toast.r{border-color:rgba(239,68,68,.4)}.toast.r .icon{color:var(--red)}
+.toast.a .icon{color:var(--amber)}
+
+.empty{text-align:center;padding:40px 20px;color:var(--tx3)}
+.empty .icon{width:40px;height:40px;margin-bottom:10px;opacity:.4}
+.empty p{font-size:12.5px}
+.skel{height:70px;border-radius:var(--r);margin:10px 0;background:linear-gradient(90deg,var(--card) 25%,var(--card2) 50%,var(--card) 75%);background-size:200% 100%;animation:sh 1.4s infinite}
+@keyframes sh{to{background-position:-200% 0}}
+.hidden{display:none!important}
+.muted{color:var(--tx3);font-size:11px}
+#refreshBar{position:fixed;top:0;right:0;height:2.5px;background:var(--green);z-index:80;width:0;transition:width 1s linear}
+.setdot{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--tx2)}
+</style>
+</head>
+<body>
+
+<!-- LOCK SCREEN -->
+<div id="lock">
+  <div class="lock-card">
+    <div class="lock-logo"><i data-lucide="shield-check" class="icon" style="width:30px;height:30px"></i></div>
+    <h1>پنل مدیریت سیستم ۲</h1>
+    <div class="sub">برای ورود، کلید مدیریت (Admin Key) سرور را وارد کنید</div>
+    <input class="field" id="lockKey" type="password" placeholder="کلید مدیریت" autocomplete="off">
+    <button class="btn full" id="lockBtn" style="margin-top:12px"><i data-lucide="log-in" class="icon" style="width:16px;height:16px"></i>ورود</button>
+    <div class="lock-err" id="lockErr"></div>
+  </div>
+</div>
+
+<div id="refreshBar"></div>
+<div class="wrap" id="app" style="display:none">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="brand">
+      <div class="logo"><i data-lucide="shield-check" class="icon" style="width:20px;height:20px"></i></div>
+      <div style="min-width:0;flex:1">
+        <h1>پنل مدیریت — سیستم ۲</h1>
+        <div class="meta" id="srvUrl"></div>
+      </div>
+    </div>
+    <div class="setdot" id="srvDot"><span class="dot gr"></span>…</div>
+    <div class="iconbtn" id="btnSettings" title="تنظیمات اتصال"><i data-lucide="settings" class="icon"></i></div>
+    <div class="iconbtn" id="btnRefresh" title="بروزرسانی"><i data-lucide="refresh-cw" class="icon"></i></div>
+  </div>
+
+  <!-- STATS -->
+  <div class="stats">
+    <div class="stat"><div class="ic g"><i data-lucide="users" class="icon"></i></div><div class="v" id="stUsers">—</div><div class="l">کل کاربران</div></div>
+    <div class="stat"><div class="ic b"><i data-lucide="wifi" class="icon"></i></div><div class="v" id="stConn">—</div><div class="l">واتساپ متصل</div></div>
+    <div class="stat"><div class="ic a"><i data-lucide="receipt" class="icon"></i></div><div class="v" id="stReceipts">—</div><div class="l">کل فیش‌ها</div></div>
+    <div class="stat"><div class="ic p"><i data-lucide="key-round" class="icon"></i></div><div class="v" id="stCreds">—</div><div class="l">حساب‌های نام کاربری</div></div>
+  </div>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <div class="tab on" data-tab="users"><i data-lucide="users" class="icon"></i>کاربران<span class="cnt" id="tabUsersCnt">0</span></div>
+    <div class="tab" data-tab="policy"><i data-lucide="sliders-horizontal" class="icon"></i>سیاست‌ها</div>
+    <div class="tab" data-tab="creds"><i data-lucide="key-round" class="icon"></i>حساب‌ها<span class="cnt" id="tabCredsCnt">0</span></div>
+  </div>
+
+  <!-- USERS TAB -->
+  <div id="tab-users">
+    <div class="search">
+      <input class="field" id="searchQ" placeholder="جستجو: نام، ایمیل، شماره، نام کاربری…">
+      <select class="field" id="filterState" style="width:130px">
+        <option value="">همه وضعیت‌ها</option>
+        <option value="connected">متصل</option>
+        <option value="disconnected">قطع</option>
+      </select>
+    </div>
+    <div class="card" id="usersCard">
+      <div id="usersSkel"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
+      <div id="usersList"></div>
+    </div>
+  </div>
+
+  <!-- POLICY TAB -->
+  <div id="tab-policy" style="display:none">
+    <div class="card">
+      <div class="card-h"><i data-lucide="sliders-horizontal" class="icon"></i><h2>سیاست پیش‌فرض کاربران جدید</h2></div>
+      <div class="card-b">
+        <div class="row">
+          <div class="rl"><div class="t">فیش تکراری (بوت صرافی)</div><div class="d">اگر روشن باشد، هر کاربرِ جدید می‌تواند بوت فیش تکراری را از پنل خودش روشن کند. اگر خاموش باشد، سوییچ برای همه قفل است.</div></div>
+          <label class="sw"><input type="checkbox" id="defDup"><span class="tr"></span></label>
+        </div>
+        <div class="row">
+          <div class="rl"><div class="t">پنل واسطه تأیید فیش</div><div class="d">اگر روشن باشد، کاربر جدید می‌تواند پنل تأیید فیش را فعال کند. اگر خاموش باشد، برای همه قفل است.</div></div>
+          <label class="sw"><input type="checkbox" id="defConfirm"><span class="tr"></span></label>
+        </div>
+        <p class="muted" style="margin-top:10px">تغییر سیاست فقط روی کاربران «جدید» اثر می‌گذارد؛ وضعیت کاربران فعلی از تب کاربران، جداگانه برای هر نفر قابل قفل/آزاد است.</p>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><i data-lucide="info" class="icon"></i><h2>راهنمای سیاست‌ها</h2></div>
+      <div class="card-b" style="font-size:12.5px;color:var(--tx2);line-height:2">
+        *قفل کردن* فیش تکراری یا تأیید فیش، همان لحظه سوییچ همان بخش را در پنل خود کاربر هم خاموش می‌کند و وضعیتش ذخیره می‌شود.<br>
+        *آزاد گذاشتن* یعنی اختیار با خود کاربر است؛ هر وضعیتی دارد نگه داشته می‌شود و می‌تواند خودش عوض کند.
+      </div>
+    </div>
+  </div>
+
+  <!-- CREDS TAB -->
+  <div id="tab-creds" style="display:none">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+      <button class="btn" id="btnNewCred"><i data-lucide="user-plus" class="icon" style="width:16px;height:16px"></i>حساب جدید</button>
+    </div>
+    <div class="card"><div id="credsList"></div></div>
+  </div>
+
+</div>
+
+<!-- MODAL -->
+<div id="modal"><div class="mcard" id="mcard"></div></div>
+<div id="toasts"></div>
+
+<script>
+/* ==== پنل مدیریت مستقل سیستم ۲ ====
+   هر جا هاست شود به سرور روبه‌رو وصل می‌شود.
+   سرور مقصد و کلید مدیریت از داخل خود پنل قابل تغییر است. */
+let BASE = localStorage.getItem("s2_admin_base") || "https://sarafi-bot-2.onrender.com";
+let KEY = localStorage.getItem("s2_admin_key") || "";
+let DATA = null; /* آخرین /api/admin/users */
+let CREDS = [];
+let timer = null, autoOn = true;
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+function icons(){ try{ lucide.createIcons(); }catch(e){} }
+
+/* ===== API ===== */
+async function api(path, body, method){
+  const opts = { method: method || (body ? "POST" : "GET"), headers: { "x-admin-key": KEY } };
+  if(body){ opts.headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(body); }
+  let r;
+  try{ r = await fetch(BASE + path, opts); }
+  catch(e){ toast("ارتباط با سرور برقرار نشد — آدرس سرور را چک کنید", "r", "wifi-off"); return null; }
+  if(r.status === 401 || r.status === 403){ showLock("کلید مدیریت اشتباه است"); return null; }
+  let j = null; try{ j = await r.json(); }catch(e){}
+  return j;
+}
+
+/* ===== TOAST ===== */
+function toast(msg, kind, icon){
+  const t = document.createElement("div");
+  t.className = "toast " + (kind || "");
+  t.innerHTML = '<i data-lucide="' + (icon || (kind === "r" ? "x-circle" : "check-circle-2")) + '" class="icon"></i><span>' + esc(msg) + '</span>';
+  $("toasts").appendChild(t); icons();
+  setTimeout(() => { t.style.opacity = "0"; t.style.transition = ".3s"; setTimeout(() => t.remove(), 320); }, 3200);
+}
+
+/* ===== LOCK ===== */
+function showLock(err){
+  $("lock").classList.remove("hidden"); $("app").style.display = "none";
+  if(err) $("lockErr").textContent = err;
+  if(KEY) $("lockKey").value = KEY;
+  stopTimer();
+}
+async function tryLogin(){
+  const k = $("lockKey").value.trim();
+  if(!k){ $("lockErr").textContent = "کلید را وارد کنید"; return; }
+  $("lockBtn").disabled = true; $("lockErr").textContent = "";
+  KEY = k; localStorage.setItem("s2_admin_key", k);
+  const j = await api("/api/admin/check");
+  $("lockBtn").disabled = false;
+  if(!j) return;
+  $("lock").classList.add("hidden"); $("app").style.display = "";
+  $("srvUrl").textContent = BASE;
+  startTimer(); refreshAll();
+}
+$("lockBtn").onclick = tryLogin;
+$("lockKey").addEventListener("keydown", e => { if(e.key === "Enter") tryLogin(); });
+
+/* ===== REFRESH ===== */
+async function refreshAll(){
+  const bar = $("refreshBar"); bar.style.width = "100%";
+  const [users, creds, health] = await Promise.all([
+    api("/api/admin/users"),
+    api("/api/admin/credentials"),
+    fetch(BASE + "/api/health").then(r => r.json()).catch(() => null)
+  ]);
+  setTimeout(() => { bar.style.width = "0"; }, 900);
+  if(!users) return;
+  DATA = users; CREDS = (creds && creds.credentials) || [];
+  /* سرور زنده؟ */
+  const dot = $("srvDot");
+  if(health && health.ok){ dot.innerHTML = '<span class="dot g"></span>سرور آنلاین'; }
+  else{ dot.innerHTML = '<span class="dot r"></span>سرور پاسخ نمی‌دهد'; }
+  /* آمار */
+  $("stUsers").textContent = users.total || 0;
+  $("stConn").textContent = users.connected || 0;
+  $("stReceipts").textContent = users.receiptsTotal || 0;
+  $("stCreds").textContent = CREDS.length;
+  $("tabUsersCnt").textContent = users.total || 0;
+  $("tabCredsCnt").textContent = CREDS.length;
+  /* سیاست‌ها */
+  const d = users.defaults || {};
+  $("defDup").checked = !!d.allowDup;
+  $("defConfirm").checked = !!d.allowConfirm;
+  renderUsers(); renderCreds();
+  $("usersSkel").classList.add("hidden");
+}
+function startTimer(){ stopTimer(); if(autoOn) timer = setInterval(refreshAll, 15000); }
+function stopTimer(){ if(timer){ clearInterval(timer); timer = null; } }
+$("btnRefresh").onclick = () => { refreshAll(); toast("بروزرسانی شد", "g", "refresh-cw"); };
+
+/* ===== TABS ===== */
+document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
+  document.querySelectorAll(".tab").forEach(x => x.classList.remove("on"));
+  t.classList.add("on");
+  ["users","policy","creds"].forEach(n => $("tab-" + n).style.display = "none");
+  $("tab-" + t.dataset.tab).style.display = "";
+});
+
+/* ===== USERS ===== */
+const stateFa = { connected:["متصل","g"], connecting:["در حال اتصال","a"], waiting:["انتظار QR","a"], disconnected:["قطع","r"] };
+function timeFa(ts){
+  if(!ts) return "—";
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if(s < 60) return "همین حالا";
+  if(s < 3600) return Math.floor(s / 60) + " دقیقه پیش";
+  if(s < 86400) return Math.floor(s / 3600) + " ساعت پیش";
+  return Math.floor(s / 86400) + " روز پیش";
+}
+function filteredUsers(){
+  const q = ($("searchQ").value || "").trim().toLowerCase();
+  const st = $("filterState").value;
+  return (DATA ? DATA.users : []).filter(u => {
+    if(st && ((st === "connected") !== !!u.connected)) return false;
+    if(!q) return true;
+    return [u.name, u.email, u.username, u.botNumber].some(x => x && String(x).toLowerCase().includes(q));
+  });
+}
+function renderUsers(){
+  const list = filteredUsers(), box = $("usersList");
+  if(!list.length){
+    box.innerHTML = '<div class="empty"><i data-lucide="users" class="icon"></i><p>' + (DATA && DATA.users.length ? "نتیجه‌ای پیدا نشد" : "هنوز کاربری ثبت‌نشده است") + '</p></div>';
+    icons(); return;
+  }
+  box.innerHTML = list.map(u => {
+    const [stFa, stCls] = stateFa[u.state] || ["نامشخص","gr"];
+    const initial = esc(((u.name || u.email || "?")[0] || "?").toUpperCase());
+    return '<div class="user">' +
+      '<div class="av">' + (u.picture ? '<img src="' + esc(u.picture) + '" onerror="this.remove()">' : initial) + '</div>' +
+      '<div class="uinfo">' +
+        '<div class="nm"><span class="dot ' + (u.connected ? "g" : stCls) + '"></span>' + esc(u.name || "بی‌نام") + (u.username ? ' <span class="chip b">@' + esc(u.username) + '</span>' : '') + '</div>' +
+        '<div class="em">' + esc(u.email || "—") + '</div>' +
+        '<div class="chips">' +
+          '<span class="chip ' + stCls + '">' + stFa + '</span>' +
+          (u.botNumber ? '<span class="chip" dir="ltr">' + esc(u.botNumber) + '</span>' : '') +
+          '<span class="chip">' + (u.receipts || 0) + ' فیش</span>' +
+          (u.groups ? '<span class="chip">' + u.groups + ' گروه</span>' : '') +
+          (u.confirmEnabled ? '<span class="chip a">تأیید فعال</span>' : '') +
+          '<span class="chip">آخرین: ' + timeFa(u.lastSeen) + '</span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="ubtns">' +
+        '<button class="mini ' + (u.allowDup ? "on" : "off") + '" onclick="tglUser(\'' + u.gid + '\',\'allowDup\',' + (!u.allowDup) + ')"><i data-lucide="repeat" class="icon"></i>تکراری: ' + (u.allowDup ? "آزاد" : "قفل") + '</button>' +
+        '<button class="mini ' + (u.allowConfirm ? "on" : "off") + '" onclick="tglUser(\'' + u.gid + '\',\'allowConfirm\',' + (!u.allowConfirm) + ')"><i data-lucide="check-check" class="icon"></i>تأیید: ' + (u.allowConfirm ? "آزاد" : "قفل") + '</button>' +
+      '</div>' +
+    '</div>';
+  }).join("");
+  icons();
+}
+$("searchQ").addEventListener("input", renderUsers);
+$("filterState").addEventListener("change", renderUsers);
+
+async function tglUser(gid, field, val){
+  const j = await api("/api/admin/user", { gid: gid, [field]: val });
+  if(!j || !j.ok){ toast("تغییر اعمال نشد", "r"); return; }
+  const u = DATA.users.find(x => x.gid === gid);
+  if(u){ u[field] = val; if(j.userState){ u.confirmEnabled = !!j.userState.confirmEnabled; } }
+  renderUsers();
+  toast((val ? "آزاد شد — اختیار با خود کاربر" : "قفل شد — سوییچ کاربر خاموش شد"), "g", val ? "unlock" : "lock");
+}
+
+/* ===== POLICY ===== */
+async function saveDefaults(){
+  const j = await api("/api/admin/defaults", { allowDup: $("defDup").checked, allowConfirm: $("defConfirm").checked });
+  if(!j || !j.ok){ toast("ذخیره نشد", "r"); return; }
+  toast("سیاست کاربران جدید ذخیره شد", "g", "save");
+}
+$("defDup").addEventListener("change", saveDefaults);
+$("defConfirm").addEventListener("change", saveDefaults);
+
+/* ===== CREDS ===== */
+function renderCreds(){
+  const box = $("credsList");
+  if(!CREDS.length){ box.innerHTML = '<div class="empty"><i data-lucide="key-round" class="icon"></i><p>هنوز حساب نام‌کاربری‌ای ساخته نشده</p></div>'; icons(); return; }
+  box.innerHTML = CREDS.map(c =>
+    '<div class="row">' +
+      '<div class="rl"><div class="t">@' + esc(c.username) + (c.name ? ' — ' + esc(c.name) : '') + '</div>' +
+      '<div class="d">ساخته‌شده: ' + timeFa(c.createdAt) + '</div></div>' +
+      '<button class="mini" onclick="editCred(\'' + esc(c.username) + '\')"><i data-lucide="pencil" class="icon"></i>ویرایش</button>' +
+      '<button class="mini off" onclick="delCred(\'' + esc(c.username) + '\')"><i data-lucide="trash-2" class="icon"></i>حذف</button>' +
+    '</div>').join("");
+  icons();
+}
+function modal(html){ $("mcard").innerHTML = '<button class="modal-x" onclick="closeModal()"><i data-lucide="x" class="icon" style="width:16px;height:16px"></i></button>' + html; $("modal").classList.add("show"); icons(); }
+function closeModal(){ $("modal").classList.remove("show"); }
+$("modal").addEventListener("click", e => { if(e.target.id === "modal") closeModal(); });
+
+function credForm(uname, name, isNew){
+  modal('<h3><i data-lucide="' + (isNew ? "user-plus" : "pencil") + '" class="icon"></i>' + (isNew ? "ساخت حساب نام‌کاربری" : "ویرایش @" + esc(uname)) + '</h3>' +
+    (isNew ? '<div class="mrow"><label class="lbl">نام کاربری (حروف کوچک انگلیسی، عدد، نقطه یا آندرلاین — ۳ تا ۲۴)</label><input class="field" id="cU" placeholder="ali_01" dir="ltr"></div>' : '') +
+    '<div class="mrow"><label class="lbl">نام نمایشی (اختیاری)</label><input class="field" id="cN" value="' + esc(name || "") + '" placeholder="علی"></div>' +
+    '<div class="mrow"><label class="lbl">' + (isNew ? "رمز عبور (حداقل ۴ کاراکتر)" : "رمز جدید (خالی بگذارید = بدون تغییر)") + '</label><input class="field" id="cP" type="text" placeholder="••••"></div>' +
+    '<div class="mfoot"><button class="btn sec" onclick="closeModal()">انصراف</button><button class="btn" onclick="saveCred(' + (isNew ? "true" : "false") + ',\'' + esc(uname) + '\')"><i data-lucide="check" class="icon" style="width:16px;height:16px"></i>ذخیره</button></div>');
+  if(isNew) $("cU").focus();
+}
+async function saveCred(isNew, uname){
+  const body = {
+    username: isNew ? $("cU").value.trim().toLowerCase() : uname,
+    name: $("cN").value.trim(),
+    password: $("cP").value
+  };
+  if(isNew && !body.username){ toast("نام کاربری را وارد کنید", "r"); return; }
+  if(isNew && (!body.password || body.password.length < 4)){ toast("رمز عبور حداقل ۴ کاراکتر باشد", "r"); return; }
+  const j = await api("/api/admin/credential", body);
+  if(!j || !j.ok){ toast((j && j.error) || "ذخیره نشد", "r"); return; }
+  closeModal(); toast("حساب @" + (j.username || body.username) + " ذخیره شد", "g"); refreshAll();
+}
+async function delCred(uname){
+  if(!confirm("حساب @" + uname + " حذف شود؟ (دیتای کاربر پاک نمی‌شود، فقط ورودش حذف می‌شود)")) return;
+  const j = await api("/api/admin/credential-delete", { username: uname });
+  if(!j || !j.ok){ toast("حذف نشد", "r"); return; }
+  toast("حساب @" + uname + " حذف شد", "g"); refreshAll();
+}
+function editCred(uname){
+  const c = CREDS.find(x => x.username === uname) || {};
+  credForm(uname, c.name, false);
+}
+$("btnNewCred").onclick = () => credForm("", "", true);
+
+/* ===== SETTINGS ===== */
+$("btnSettings").onclick = () => {
+  modal('<h3><i data-lucide="settings" class="icon"></i>تنظیمات اتصال</h3>' +
+    '<div class="mrow"><label class="lbl">آدرس سرور (سیستم ۲)</label><input class="field" id="sBase" value="' + esc(BASE) + '" dir="ltr"></div>' +
+    '<div class="mrow"><label class="lbl">کلید مدیریت (Admin Key)</label><input class="field" id="sKey" type="text" value="' + esc(KEY) + '" dir="ltr"></div>' +
+    '<div class="mrow"><label class="lbl">بروزرسانی خودکار (هر ۱۵ ثانیه)</label><label class="sw"><input type="checkbox" id="sAuto"' + (autoOn ? " checked" : "") + '><span class="tr"></span></label></div>' +
+    '<div class="mfoot"><button class="btn sec" onclick="closeModal()">انصراف</button><button class="btn" onclick="saveSettings()"><i data-lucide="check" class="icon" style="width:16px;height:16px"></i>ذخیره</button></div>');
+};
+async function saveSettings(){
+  const b = $("sBase").value.trim().replace(/\/+$/, "");
+  const k = $("sKey").value.trim();
+  autoOn = $("sAuto").checked;
+  localStorage.setItem("s2_admin_base", b); localStorage.setItem("s2_admin_key", k);
+  BASE = b; KEY = k; $("srvUrl").textContent = BASE;
+  closeModal(); startTimer(); refreshAll();
+  toast("تنظیمات ذخیره شد", "g");
+}
+
+/* ===== START ===== */
+icons();
+if(KEY){ $("lockKey").value = KEY; tryLogin(); } else showLock();
+</script>
+</body>
+</html>
