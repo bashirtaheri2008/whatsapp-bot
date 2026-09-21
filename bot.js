@@ -2101,7 +2101,6 @@ class UserBot {
 
 const app = express();
 app.use(express.json({ limit: "10mb" }));
-app.use(express.static(path.join(__dirname, "public")));
 
 /* ==================================================
    ADMIN API — پنل مدیریت مستقل (CORS برای هاست خارجی)
