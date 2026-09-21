@@ -1181,8 +1181,7 @@ function setSessionCookie(res, gid, secure){
   const v = signValue(gid);
   res.setHeader("Set-Cookie",
     SESSION_COOKIE + "=" + encodeURIComponent(v) +
-    "; Path=/; HttpOnly; SameSite=Lax; Max-Age=" + Math.floor(SESSION_MAX_AGE / 1000) +
-    (secure ? "; Secure" : ""));
+    "; Path=/; HttpOnly; SameSite=" + (secure ? "None; Secure" : "Lax") + "; Max-Age=" + Math.floor(SESSION_MAX_AGE / 1000));
 }
 
 function clearSessionCookie(res){
@@ -2086,6 +2085,22 @@ app.post("/api/admin/user", (req, res) => {
 
 
 /* احراز هویت سشن — همه APIها به جز auth نیاز به کوکی دارند */
+/* CORS برای فرانت‌اند جدا (هاست خارجی) — کوکی سشن همراه درخواست ارسال می‌شود */
+app.use("/api", (req, res, next) => {
+  const o = req.headers.origin;
+  if(o){
+    res.set({
+      "Access-Control-Allow-Origin": o,
+      "Access-Control-Allow-Credentials": "true",
+      "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, x-admin-key",
+      "Vary": "Origin"
+    });
+  }
+  if(req.method === "OPTIONS") return res.sendStatus(204);
+  next();
+});
+
 app.use("/api", (req, res, next) => {
   if(req.path.startsWith("/auth/") || req.path === "/health" || req.path.startsWith("/admin/")) return next();
   const gid = sessionGid(req);
@@ -2110,7 +2125,8 @@ app.get("/api/auth/google", (req, res) => {
     response_type: "code",
     scope: "openid email profile",
     access_type: "online",
-    prompt: "select_account"
+    prompt: "select_account",
+    state: (typeof req.query.next === "string" && /^https?:\/\//.test(req.query.next)) ? req.query.next : ""
   });
   res.redirect("https://accounts.google.com/o/oauth2/v2/auth?" + params.toString());
 });
@@ -2169,7 +2185,8 @@ app.get("/api/auth/google/callback", async (req, res) => {
 
     const secure = (req.headers["x-forwarded-proto"] === "https") || !!process.env.RENDER_EXTERNAL_URL;
     setSessionCookie(res, gid, secure);
-    res.redirect("/?auth=ok");
+    const back = (typeof req.query.state === "string" && /^https?:\/\//.test(req.query.state)) ? req.query.state : "/?auth=ok";
+    res.redirect(back);
   }catch(e){
     console.error("google callback:", e.message);
     res.redirect("/?auth=error");
