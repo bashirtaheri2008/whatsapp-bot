@@ -1547,6 +1547,13 @@ class UserBot {
     this.loggedOut = false;
     this.connecting = false;
 
+    /* v10.1: اگر متای قبلی روی دیسک هست (مثل برچسب حساب) از بین نرود */
+    try{
+      if(fs.existsSync(this.metaFile)){
+        const _m = JSON.parse(fs.readFileSync(this.metaFile, "utf8"));
+        this.meta = Object.assign({}, this.meta, _m, { gid });
+      }
+    }catch(e){}
     fs.mkdirSync(this.dir, { recursive: true });
   }
 
@@ -2759,11 +2766,17 @@ function listSlots(gid){
     const key = slotKey(gid, slot);
     const u = users.get(key) || null;
     const hasCreds = fs.existsSync(path.join(USERS_DIR, key, "auth_info", "creds.json"));
+    let label = "";
+    if(u){ label = u.meta.label || ""; }
+    else{
+      try{ label = (JSON.parse(fs.readFileSync(path.join(USERS_DIR, key, "meta.json"), "utf8")) || {}).label || ""; }catch(e){}
+    }
     slots.push({
       slot,
       phone: u ? (u.botNumber || null) : null,
       state: u ? u.connectionState : "disconnected",
       hasCreds,
+      label,
       exists: fs.existsSync(path.join(USERS_DIR, key)) || !!u
     });
   };
@@ -2830,7 +2843,7 @@ app.post("/api/slot/add", (req, res) => {
 app.post("/api/slot/remove", async (req, res) => {
   const gid = parseSlotKey(req.user.gid).gid;
   const slot = parseInt((req.body || {}).slot, 10);
-  if(!(slot >= 2) || slot > 99) return res.status(400).json({ ok: false, error: "حساب اصلی قابل حذف نیست — از «خروج از اکانت واتساپ» استفاده کن" });
+  if(!(slot >= 1) || slot > 99) return res.status(400).json({ ok: false, error: "حساب نامعتبر است" });
   const key = slotKey(gid, slot);
   const u = users.get(key);
   try{
@@ -2840,15 +2853,47 @@ app.post("/api/slot/remove", async (req, res) => {
       users.delete(key);
     }
   }catch(e){}
-  try{ fs.rmSync(path.join(USERS_DIR, key), { recursive: true, force: true }); }catch(e){}
+  if(slot === 1){
+    /* v10.1: حساب اصلی — پروفایل می‌ماند، دیتای واتساپ کامل پاک می‌شود */
+    const _prof = { email: (u && u.meta.email) || "", name: (u && u.meta.name) || "", picture: (u && u.meta.picture) || "" };
+    try{ fs.rmSync(path.join(USERS_DIR, key, "auth_info"), { recursive: true, force: true }); }catch(e){}
+    for(const f of ["receipts.json", "config.json", "confirm.json"]){
+      try{ fs.rmSync(path.join(USERS_DIR, key, f), { force: true }); }catch(e){}
+    }
+    /* کاربرِ خالی بازسازی شود تا سشن پنل سالم بماند */
+    const nu = ensureUser(key, _prof);
+    delete nu.meta.label;
+    nu.saveMeta();
+    nu.loadLocal();
+  }else{
+    try{ fs.rmSync(path.join(USERS_DIR, key), { recursive: true, force: true }); }catch(e){}
+  }
   /* sha cache این اسلات باطل شود */
   for(const k of pushedShaCache.keys()){
     if(k.startsWith("users/" + key + "/")) pushedShaCache.delete(k);
   }
   const secure = (req.headers["x-forwarded-proto"] === "https") || !!process.env.RENDER_EXTERNAL_URL;
-  if((req.slot || 1) === slot) setSlotCookie(res, 1, secure);
+  if((req.slot || 1) === slot){
+    const rem = listSlots(gid).slots;
+    setSlotCookie(res, rem.length ? rem[0].slot : 1, secure);
+  }
   saveUserIndex();
   console.log("🗑️ حساب (اسلات " + slot + ") حذف شد — " + gid.slice(0, 12));
+  res.json({ ok: true });
+});
+
+/* v10.1: ویرایش نام (برچسب) حساب */
+app.post("/api/slot/rename", (req, res) => {
+  const gid = parseSlotKey(req.user.gid).gid;
+  const slot = parseInt((req.body || {}).slot, 10);
+  const label = String((req.body || {}).label || "").trim().slice(0, 30);
+  if(!(slot >= 1) || slot > 99) return res.status(400).json({ ok: false, error: "حساب نامعتبر است" });
+  const key = slotKey(gid, slot);
+  if(!fs.existsSync(path.join(USERS_DIR, key))) return res.status(404).json({ ok: false, error: "این حساب وجود ندارد" });
+  let u = users.get(key);
+  if(!u) u = ensureUser(key, {});
+  u.meta.label = label || "";
+  u.saveMeta();
   res.json({ ok: true });
 });
 
