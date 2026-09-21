@@ -2404,6 +2404,42 @@ app.post("/api/auth/logout", (req, res) => {
 });
 
 /* v9.8.5: ورود با نام کاربری/رمز عبور (بدون گوگل) */
+/* v9.9.4: ثبت‌نام خودِ کاربر از صفحه ورود (پنل مستقل هم پشتیبانی می‌کند) */
+app.post("/api/auth/register", (req, res) => {
+  /* ضد اسپم: حداکثر ۵ ثبت‌نام در ساعت از هر IP */
+  const rip = req.ip || "x";
+  const rl = regThrottle.get(rip) || { n: 0, until: 0 };
+  if(rl.until > Date.now() && rl.n >= 5){
+    return res.status(429).json({ ok: false, error: "ثبت‌نام زیاد — یک ساعت بعد دوباره امتحان کن" });
+  }
+  if(rl.until < Date.now()){ rl.n = 0; rl.until = Date.now() + 3600000; }
+  rl.n++;
+  regThrottle.set(rip, rl);
+  const uname = String((req.body || {}).username || "").trim().toLowerCase();
+  const password = String((req.body || {}).password || "");
+  const name = String((req.body || {}).name || "").trim();
+  if(!/^[a-z0-9_.]{3,24}$/.test(uname)){
+    return res.json({ ok: false, error: "نام کاربری: ۳ تا ۲۴ حرف انگلیسی کوچک، عدد، نقطه یا آندرلاین" });
+  }
+  if(password.length < 4){
+    return res.json({ ok: false, error: "رمز عبور حداقل ۴ کاراکتر باشد" });
+  }
+  if(credentials.users[uname]){
+    return res.json({ ok: false, error: "این نام کاربری قبلاً گرفته شده — یکی دیگر انتخاب کن" });
+  }
+  const salt = crypto.randomBytes(16).toString("hex");
+  const gid = "up_" + uname.replace(/[^a-z0-9_]/g, "") + "_" + crypto.randomBytes(2).toString("hex");
+  credentials.users[uname] = { gid, salt, hash: hashPass(password, salt), name: name || uname, createdAt: Date.now() };
+  saveCredentials();
+  ensureUser(gid, { name: name || uname, email: "" }).loadLocal();
+  console.log("🔑 ثبت‌نام نام کاربری:", uname);
+  const secure = (req.headers["x-forwarded-proto"] === "https") || !!process.env.RENDER_EXTERNAL_URL;
+  setSessionCookie(res, gid, secure);
+  res.json({ ok: true, username: uname });
+});
+
+const regThrottle = new Map();
+
 app.post("/api/auth/login", (req, res) => {
   const uname = String((req.body || {}).username || "").trim().toLowerCase();
   const password = String((req.body || {}).password || "");

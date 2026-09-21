@@ -501,9 +501,11 @@ button,input{font-family:inherit}
       ورود با گوگل
     </a>
     <div id="loginFormWrap">
+      <input class="login-input" id="regName" placeholder="نام نمایشی (اختیاری)" autocomplete="name" style="display:none">
       <input class="login-input" id="loginUsername" placeholder="نام کاربری" autocomplete="username" autocapitalize="none">
       <input class="login-input" id="loginPassword" type="password" placeholder="رمز عبور" autocomplete="current-password">
       <button class="btn btn-secondary btn-block" id="loginSubmit">ورود</button>
+      <p class="lock-alt"><a id="regToggle">حساب نداری؟ ساخت حساب جدید</a></p>
     </div>
     <p class="lock-alt"><a id="loginToggle">ورود با نام کاربری</a></p>
   </div>
@@ -1632,21 +1634,35 @@ document.getElementById("accountLogoutBtn").addEventListener("click", async () =
     toggle.textContent = showingForm ? "ورود با نام کاربری" : "ورود با گوگل";
     document.getElementById("loginUsername").focus();
   });
+  /* v9.9.4: سوییچ حالت ثبت‌نام/ورود */
+  let isReg = false;
+  const regToggle = document.getElementById("regToggle");
+  const regName = document.getElementById("regName");
+  regToggle.addEventListener("click", (e) => {
+    e.preventDefault();
+    isReg = !isReg;
+    regName.style.display = isReg ? "block" : "none";
+    regToggle.textContent = isReg ? "حساب داری؟ ورود" : "حساب نداری؟ ساخت حساب جدید";
+    document.getElementById("loginSubmit").textContent = isReg ? "ساخت حساب" : "ورود";
+    document.getElementById("lockErr").textContent = "";
+    if(isReg) regName.focus();
+  });
   const submit = document.getElementById("loginSubmit");
   submit.addEventListener("click", async () => {
     const username = document.getElementById("loginUsername").value.trim();
     const password = document.getElementById("loginPassword").value;
+    const name = regName.value.trim();
     const err = document.getElementById("lockErr");
     submit.textContent = "...";
     try{
-      const r = await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username, password }) });
+      const r = await fetch(isReg ? "/api/auth/register" : "/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(isReg ? { username, password, name } : { username, password }) });
       const d = await r.json().catch(() => ({}));
       if(d.ok){ location.reload(); return; }
-      err.textContent = d.error || "خطا در ورود";
+      err.textContent = d.error || (isReg ? "خطا در ساخت حساب" : "خطا در ورود");
     }catch(e2){
       err.textContent = "ارتباط با سرور برقرار نشد";
     }
-    submit.textContent = "ورود";
+    submit.textContent = isReg ? "ساخت حساب" : "ورود";
   });
 })();
 
