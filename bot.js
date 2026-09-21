@@ -2802,9 +2802,9 @@ app.get("/api/slots", (req, res) => {
 app.post("/api/slot", (req, res) => {
   const gid = parseSlotKey(req.user.gid).gid;
   const slot = parseInt((req.body || {}).slot, 10);
-  if(!(slot >= 1) || slot > 99) return res.status(400).json({ ok: false, error: "شماره اسلات نامعتبر است" });
+  if(!(slot >= 1) || slot > 99) return res.status(400).json({ ok: false, error: "حساب نامعتبر است" });
   if(slot > 1 && !fs.existsSync(path.join(USERS_DIR, slotKey(gid, slot)))){
-    return res.status(404).json({ ok: false, error: "این شماره وجود ندارد" });
+    return res.status(404).json({ ok: false, error: "این حساب وجود ندارد" });
   }
   const secure = (req.headers["x-forwarded-proto"] === "https") || !!process.env.RENDER_EXTERNAL_URL;
   setSlotCookie(res, slot, secure);
@@ -2815,14 +2815,14 @@ app.post("/api/slot", (req, res) => {
 app.post("/api/slot/add", (req, res) => {
   const gid = parseSlotKey(req.user.gid).gid;
   const { nextSlot } = listSlots(gid);
-  if(nextSlot >= 99) return res.status(400).json({ ok: false, error: "حداکثر تعداد شماره رسیده است" });
+  if(nextSlot >= 99) return res.status(400).json({ ok: false, error: "حداکثر تعداد حساب رسیده است" });
   const key = slotKey(gid, nextSlot);
   const u = ensureUser(key, {});
   u.loadLocal();
   const secure = (req.headers["x-forwarded-proto"] === "https") || !!process.env.RENDER_EXTERNAL_URL;
   setSlotCookie(res, nextSlot, secure);
   saveUserIndex();
-  console.log("📱 شماره جدید (اسلات " + nextSlot + ") برای " + gid.slice(0, 12));
+  console.log("📱 حساب جدید (اسلات " + nextSlot + ") برای " + gid.slice(0, 12));
   res.json({ ok: true, slot: nextSlot });
 });
 
@@ -2830,7 +2830,7 @@ app.post("/api/slot/add", (req, res) => {
 app.post("/api/slot/remove", async (req, res) => {
   const gid = parseSlotKey(req.user.gid).gid;
   const slot = parseInt((req.body || {}).slot, 10);
-  if(!(slot >= 2) || slot > 99) return res.status(400).json({ ok: false, error: "شماره اصلی قابل حذف نیست — از «خروج از اکانت واتساپ» استفاده کن" });
+  if(!(slot >= 2) || slot > 99) return res.status(400).json({ ok: false, error: "حساب اصلی قابل حذف نیست — از «خروج از اکانت واتساپ» استفاده کن" });
   const key = slotKey(gid, slot);
   const u = users.get(key);
   try{
@@ -2848,7 +2848,7 @@ app.post("/api/slot/remove", async (req, res) => {
   const secure = (req.headers["x-forwarded-proto"] === "https") || !!process.env.RENDER_EXTERNAL_URL;
   if((req.slot || 1) === slot) setSlotCookie(res, 1, secure);
   saveUserIndex();
-  console.log("🗑️ شماره (اسلات " + slot + ") حذف شد — " + gid.slice(0, 12));
+  console.log("🗑️ حساب (اسلات " + slot + ") حذف شد — " + gid.slice(0, 12));
   res.json({ ok: true });
 });
 
@@ -2942,7 +2942,7 @@ setInterval(() => {
   server.listen(PORT, () => {
     console.log("");
     console.log("🌐 پنل وب: http://localhost:" + PORT);
-    console.log("🤖 نسخه چندکاربره v10.0.0 — چندشماره‌ای (اسلات)");
+    console.log("🤖 نسخه چندکاربره v10.0.0 — چندحسابی");
     console.log("🔑 OAuth گوگل:", googleOAuthConfigured() ? "فعال" : "❌ تنظیم نشده");
     console.log("💾 حداکثر بات هم‌زمان:", MAX_CONCURRENT_BOTS);
     console.log("🎯 تشخیص تکراری سخت‌گیرانه (Strict)");
