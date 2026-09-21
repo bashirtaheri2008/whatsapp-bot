@@ -814,12 +814,21 @@ async function extractReceiptInfo(imageData){
      server-secret.txt — رمز امضای سشن (برای ماندگاری کوکی‌ها)
    ================================================== */
 
-const GH_TOKEN = process.env.GITHUB_TOKEN || "";
+/* v9.9.3: چندتوکنی — GITHUB_TOKEN می‌تواند چند توکن با کاما جدا کند.
+   با تمام‌شدن سهمیه یا بی‌اعتبار شدن هر توکن، خودکار به توکن بعدی می‌چرخد. */
+const GH_TOKENS = (process.env.GITHUB_TOKEN || "").split(",").map(t => t.trim()).filter(Boolean);
 const GH_REPO = process.env.GITHUB_REPO || "";
 const GH_BASE = process.env.GH_BASE || "https://api.github.com";
 
 function cloudEnabled(){
-  return !!(GH_TOKEN && GH_REPO);
+  return !!(GH_TOKENS.length && GH_REPO);
+}
+
+let ghTokenIdx = 0;
+function ghCurToken(){ return GH_TOKENS[ghTokenIdx] || ""; }
+function ghNextToken(){
+  if(GH_TOKENS.length > 1) ghTokenIdx = (ghTokenIdx + 1) % GH_TOKENS.length;
+  return ghCurToken();
 }
 
 let ghPausedUntil = 0; /* تا این زمان بکاپ‌ها متوقف می‌مانند (لی‌میت) */
@@ -833,32 +842,169 @@ function ghRateLimited(){
    با برگشتن سهمیه، خودکار رفع و بازیابی دوباره انجام می‌شود. */
 let cloudBlocked = false;
 async function ghQuotaOK(){
-  try{
-    const r = await fetch(GH_BASE + "/rate_limit", { headers: { Authorization: "token " + GH_TOKEN, Accept: "application/vnd.github+json", "User-Agent": "wa-bot-multiuser" } });
-    const d = await r.json();
-    return (d.resources && d.resources.core && d.resources.core.remaining > 100);
-  }catch(e){ return true; } /* اگر بررسی ممکن نشد، پوش آزاد می‌ماند */
+  /* بررسی سهمیه رایگان است — همه توکن‌ها چک می‌شوند و بهترین انتخاب می‌شود */
+  for(let i = 0; i < GH_TOKENS.length; i++){
+    try{
+      const r = await fetch(GH_BASE + "/rate_limit", { headers: { Authorization: "token " + ghCurToken(), Accept: "application/vnd.github+json", "User-Agent": "wa-bot-multiuser" } });
+      const d = await r.json();
+      const rem = d.resources && d.resources.core && d.resources.core.remaining;
+      if(r.ok && typeof rem === "number" && rem > 100) return true;
+      ghNextToken();
+    }catch(e){ return true; } /* اگر بررسی ممکن نشد، پوش آزاد می‌ماند */
+  }
+  return false;
 }
 
+const GH_FAKE_RES = { ok: false, status: 0, headers: { get: () => null }, json: async () => ({}), arrayBuffer: async () => new ArrayBuffer(0) };
+
 async function ghApi(method, urlPath, body){
-  try{
-    const headers = {
-      "Authorization": "token " + GH_TOKEN,
-      "Accept": "application/vnd.github+json",
-      "User-Agent": "wa-bot-multiuser"
-    };
-    const opts = { method, headers };
-    if(body) opts.body = JSON.stringify(body);
-    const r = await fetch(GH_BASE + urlPath, opts);
-    if(r.status === 403 || r.status === 429){
-      /* لی‌میت خورد — ۱۵ دقیقه بکاپ بخواب */
-      ghPausedUntil = Date.now() + 15 * 60 * 1000;
-      console.warn("⏸️ لی‌میت گیت‌هاب — بکاپ‌ها تا ۱۵ دقیقه متوقف شد");
+  for(let attempt = 0; attempt < Math.max(GH_TOKENS.length, 1); attempt++){
+    try{
+      const headers = {
+        "Authorization": "token " + ghCurToken(),
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "wa-bot-multiuser"
+      };
+      const opts = { method, headers };
+      if(body) opts.body = JSON.stringify(body);
+      const r = await fetch(GH_BASE + urlPath, opts);
+      if((r.status === 401 || r.status === 403 || r.status === 429) && GH_TOKENS.length > 1){
+        ghNextToken(); /* این توکن تمام شد — توکن بعدی */
+        continue;
+      }
+      if(r.status === 403 || r.status === 429){
+        /* لی‌میت خورد — ۱۵ دقیقه بکاپ بخواب */
+        ghPausedUntil = Date.now() + 15 * 60 * 1000;
+        console.warn("⏸️ لی‌میت گیت‌هاب — بکاپ‌ها تا ۱۵ دقیقه متوقف شد");
+      }
+      return r;
+    }catch(e){
+      return GH_FAKE_RES;
     }
-    return r;
-  }catch(e){
-    return { ok: false, status: 0, json: async () => ({}) };
   }
+  return GH_FAKE_RES;
+}
+
+/* ==== v9.9.3: بکاپ فله با Git Tree API — کل تغییرات یک کاربر با ۳-۵ درخواست ==== */
+let ghDefaultBranch = null;
+async function ghBranch(){
+  if(ghDefaultBranch) return ghDefaultBranch;
+  try{
+    const r = await ghApi("GET", "/repos/" + GH_REPO);
+    if(r.ok) ghDefaultBranch = (await r.json()).default_branch || "main";
+  }catch(e){}
+  return ghDefaultBranch || "main";
+}
+
+function ghIsBinary(file){
+  try{ return fs.readFileSync(file).includes(0); }catch(e){ return false; }
+}
+function ghRemoteKey(remotePath, localFile){
+  return remotePath + (ghIsBinary(localFile) ? ".b64" : "");
+}
+
+async function ghCommitPairs(pairs, message){
+  /* کل فایل‌های تغییرکرده را با Git Tree API در چند درخواست کامیت می‌کند.
+     فایل‌های باینری با پسوند .b64 و کدگذاری base64 ذخیره می‌شوند. */
+  if(!pairs || !pairs.length) return 0;
+  const branch = await ghBranch();
+  const ref = await ghApi("GET", "/repos/" + GH_REPO + "/git/ref/heads/" + branch);
+  let parentSha = null, baseTree = null;
+  if(ref.ok){
+    parentSha = (await ref.json()).object.sha;
+    const c = await ghApi("GET", "/repos/" + GH_REPO + "/git/commits/" + parentSha);
+    if(c.ok) baseTree = (await c.json()).tree.sha;
+  }
+  /* آماده‌سازی ورودی‌ها + تقسیم به قطعات */
+  const chunks = [];
+  let cur = [], curSize = 0;
+  for(const pair of pairs){
+    let buf;
+    try{ buf = fs.readFileSync(pair[1]); }catch(e){ continue; }
+    const bin = buf.includes(0);
+    const content = bin ? buf.toString("base64") : buf.toString("utf8");
+    if(cur.length && (cur.length >= 250 || curSize + content.length > 20000000)){
+      chunks.push(cur); cur = []; curSize = 0;
+    }
+    cur.push({ path: pair[0] + (bin ? ".b64" : ""), mode: "100644", type: "blob", content: content });
+    curSize += content.length;
+  }
+  if(cur.length) chunks.push(cur);
+  let done = 0, lastCommit = parentSha, lastTree = baseTree;
+  for(const chunk of chunks){
+    const t = await ghApi("POST", "/repos/" + GH_REPO + "/git/trees",
+      { ...(lastTree ? { base_tree: lastTree } : {}), tree: chunk });
+    if(!t.ok) return done;
+    lastTree = (await t.json()).sha;
+    const c = await ghApi("POST", "/repos/" + GH_REPO + "/git/commits",
+      { message: message, tree: lastTree, ...(lastCommit ? { parents: [lastCommit] } : {}) });
+    if(!c.ok) return done;
+    lastCommit = (await c.json()).sha;
+    done += chunk.length;
+  }
+  if(lastCommit){
+    const u = await ghApi("PATCH", "/repos/" + GH_REPO + "/git/refs/heads/" + branch, { sha: lastCommit });
+    if(!u.ok){
+      /* شاخه هنوز وجود ندارد (مخزن خالی) — ساخته می‌شود */
+      const c2 = await ghApi("POST", "/repos/" + GH_REPO + "/git/refs", { ref: "refs/heads/" + branch, sha: lastCommit });
+      if(!c2.ok) return 0;
+    }
+  }else{
+    return 0;
+  }
+  /* کش sha تا دفعات بعد دوباره پوش نشود */
+  for(const pair of pairs){
+    try{ pushedShaCache.set(ghRemoteKey(pair[0], pair[1]), blobSha(pair[1])); }catch(e){}
+  }
+  return pairs.length;
+}
+
+/* ==== v9.9.3: بازیابی فله — کل دیتا با «یک» درخواست (tarball) ==== */
+async function ghFetchTarball(){
+  try{
+    const branch = await ghBranch();
+    const r = await ghApi("GET", "/repos/" + GH_REPO + "/tarball/" + branch);
+    if(!r.ok){
+      if(r.status === 404){ console.log("☁️ مخزن ابری خالی است — شروع تازه"); return null; }
+      console.log("⚠️ دانلود فله ناموفق (" + r.status + ") — بازیابی فایل‌به‌فایل");
+      return null;
+    }
+    const buf = Buffer.from(await r.arrayBuffer());
+    const tag = Date.now();
+    const tgz = path.join(os.tmpdir(), "gh-restore-" + tag + ".tgz");
+    const dir = path.join(os.tmpdir(), "gh-restore-" + tag + "-d");
+    fs.writeFileSync(tgz, buf);
+    fs.mkdirSync(dir, { recursive: true });
+    await new Promise((resolve, reject) => {
+      execFile("tar", ["-xzf", tgz, "-C", dir, "--strip-components=1"], err => err ? reject(err) : resolve());
+    });
+    try{ fs.unlinkSync(tgz); }catch(e){}
+    console.log("☁️ دیتای ابری در یک درخواست دانلود شد (" + Math.round(buf.length / 1024) + "KB)");
+    return dir;
+  }catch(e){
+    console.log("⚠️ استخراج tarball ممکن نشد — بازیابی فایل‌به‌فایل: " + e.message);
+    return null;
+  }
+}
+
+function ghTakeFromCloud(cloudDir, remote, local){
+  /* کپی از دیتای tarball-extract شده — فقط وقتی فایل محلی غایب یا خالی است (ضد بازنویسی) */
+  try{
+    let src = path.join(cloudDir, remote);
+    let wasB64 = false;
+    if(!fs.existsSync(src) && fs.existsSync(src + ".b64")){ src = src + ".b64"; wasB64 = true; }
+    if(!fs.existsSync(src)) return false;
+    const need = !fs.existsSync(local) || fs.statSync(local).size === 0;
+    if(!need) return false;
+    fs.mkdirSync(path.dirname(local), { recursive: true });
+    if(wasB64){
+      fs.writeFileSync(local, Buffer.from(fs.readFileSync(src, "utf8").trim(), "base64"));
+    }else{
+      fs.copyFileSync(src, local);
+    }
+    try{ pushedShaCache.set(ghRemoteKey(remote, local), blobSha(local)); }catch(e){}
+    return true;
+  }catch(e){ return false; }
 }
 
 /* کش sha فایل‌های پوش‌شده — فقط تغییرات پوش می‌شوند (ضد ریت‌لیمیت گیت‌هاب) */
@@ -906,7 +1052,9 @@ async function ghGetFile(remotePath, localFile){
   if(!g.ok) return false;
   const j = await g.json();
   fs.mkdirSync(path.dirname(localFile), { recursive: true });
-  fs.writeFileSync(localFile, Buffer.from(j.content, "base64"));
+  let buf = Buffer.from(j.content, "base64");
+  if(/\.b64$/.test(remotePath)) buf = Buffer.from(buf.toString("utf8").trim(), "base64");
+  fs.writeFileSync(localFile, buf);
   try{ pushedShaCache.set(remotePath, blobSha(localFile)); }catch(e){}
   return true;
 }
@@ -932,16 +1080,20 @@ async function backupUser(gid, reason){
         if(fs.statSync(p).isFile()) files.push([remote("auth_info/" + f), p]);
       });
     }
-    let ok = 0;
-    let changed = 0;
+    /* v9.9.3: همه فایل‌های تغییرکرده با Git Tree API در چند درخواست پوش می‌شوند */
+    const changed = [];
     for(const pair of files){
       let localSha;
       try{ localSha = blobSha(pair[1]); }catch(e){ continue; }
-      if(pushedShaCache.get(pair[0]) === localSha) continue;
-      changed++;
-      if(await ghPutFile(pair[0], pair[1])) ok++;
+      if(pushedShaCache.get(ghRemoteKey(pair[0], pair[1])) === localSha) continue;
+      changed.push(pair);
     }
-    console.log("☁️ بکاپ [" + gid.slice(0, 10) + "] " + reason + ": " + (changed ? (ok + "/" + changed + " فایل تغییرکرده") : "بدون تغییر"));
+    if(!changed.length){
+      console.log("☁️ بکاپ [" + gid.slice(0, 10) + "] " + reason + ": بدون تغییر");
+    }else{
+      const ok = await ghCommitPairs(changed, "backup: " + gid.slice(0, 10) + " (" + reason + ")");
+      console.log("☁️ بکاپ [" + gid.slice(0, 10) + "] " + reason + ": " + (ok ? (ok + " فایل در چند درخواست") : "ناموفق — بعداً دوباره"));
+    }
   }catch(e){
     console.error("backup:", e.message);
   }finally{
@@ -986,19 +1138,29 @@ async function restoreAllFromGithub(){
     return;
   }
   try{
+    /* v9.9.3: کل دیتای ابری با «یک» درخواست (tarball) — در نبودش فایل‌به‌فایل */
+    const cloudDir = await ghFetchTarball();
+    const take = (remote, local) => {
+      if(cloudDir && ghTakeFromCloud(cloudDir, remote, local)) return true;
+      return false;
+    };
     /* رمز امضای سشن */
     const secretFile = path.join(DATA_ROOT, "server-secret.txt");
     if(!fs.existsSync(secretFile)){
-      await ghGetFile("server-secret.txt", secretFile);
+      if(!take("server-secret.txt", secretFile)) await ghGetFile("server-secret.txt", secretFile);
     }
     /* تنظیمات مدیریت */
     try{
-      if(!fs.existsSync(ADMIN_FILE)) await ghGetFile("admin.json", ADMIN_FILE);
+      if(!fs.existsSync(ADMIN_FILE)){
+        if(!take("admin.json", ADMIN_FILE)) await ghGetFile("admin.json", ADMIN_FILE);
+      }
     }catch(e){}
     loadAdmin();
     /* v9.8.5: بازیابی کاربران نام‌کاربری/رمز */
     try{
-      if(!fs.existsSync(CRED_FILE)) await ghGetFile("credentials.json", CRED_FILE);
+      if(!fs.existsSync(CRED_FILE)){
+        if(!take("credentials.json", CRED_FILE)) await ghGetFile("credentials.json", CRED_FILE);
+      }
     }catch(e){}
     loadCredentials();
     /* فهرست کاربران */
@@ -1008,7 +1170,7 @@ async function restoreAllFromGithub(){
       if(fs.existsSync(idxLocal)) index = JSON.parse(fs.readFileSync(idxLocal, "utf8"));
     }catch(e){}
     if(!index){
-      await ghGetFile("users/index.json", idxLocal);
+      if(!take("users/index.json", idxLocal)) await ghGetFile("users/index.json", idxLocal);
       try{ index = JSON.parse(fs.readFileSync(idxLocal, "utf8")); }catch(e){ index = null; }
     }
     const list = (index && Array.isArray(index.users)) ? index.users : [];
@@ -1020,29 +1182,63 @@ async function restoreAllFromGithub(){
         /* v9.8.3: کاربران موجود ثبت/قفل می‌شوند تا سیاست سراسری جدید اثری بر آن‌ها نداشته باشد */
         if(!adminState.users[gid]) adminState.users[gid] = adminDefaults();
         const u = ensureUser(gid, { email: item.email || "" }, true); /* deferSave: پروفایل خالی نوشته نشود */
-        if(!fs.existsSync(u.metaFile)){
-          const okMeta = await ghGetFile("users/" + gid + "/meta.json", u.metaFile);
-          if(!okMeta) console.log("⚠️ پروفایل ابری یافت نشد [" + gid.slice(0, 10) + "] — ذخیره خالی انجام نمی‌شود");
+        if(cloudDir){
+          /* v9.9.3: بازیابی فله — همه فایل‌ها از tarball محلی کپی می‌شوند (صفر درخواست API) */
+          take("users/" + gid + "/meta.json", u.metaFile);
+          if(!fs.existsSync(u.metaFile)){
+            console.log("⚠️ پروفایل ابری یافت نشد [" + gid.slice(0, 10) + "] — ذخیره خالی انجام نمی‌شود");
+          }
+          take("users/" + gid + "/receipts.json", u.receiptsFile);
+          take("users/" + gid + "/config.json", u.configFile);
+          take("users/" + gid + "/confirm.json", u.confirmFile);
+          /* نشست واتساپ — کل پوشه یکجا */
+          const srcAuth = path.join(cloudDir, "users", gid, "auth_info");
+          if(fs.existsSync(srcAuth)){
+            fs.mkdirSync(u.authDir, { recursive: true });
+            let n = 0;
+            for(const f of fs.readdirSync(srcAuth)){
+              try{
+                const realName = f.replace(/\.b64$/, "");
+                const lp = path.join(u.authDir, realName);
+                if(!fs.existsSync(lp) || fs.statSync(lp).size === 0){
+                  if(/\.b64$/.test(f)){
+                    fs.writeFileSync(lp, Buffer.from(fs.readFileSync(path.join(srcAuth, f), "utf8").trim(), "base64"));
+                  }else{
+                    fs.copyFileSync(path.join(srcAuth, f), lp);
+                  }
+                  try{ pushedShaCache.set(ghRemoteKey("users/" + gid + "/auth_info/" + realName, lp), blobSha(lp)); }catch(e){}
+                  n++;
+                }
+              }catch(e){}
+            }
+            console.log("☁️ نشست [" + gid.slice(0, 10) + "]: " + n + " فایل");
+          }
+        }else{
+          /* حالت جایگزین: بازیابی فایل‌به‌فایل */
+          if(!fs.existsSync(u.metaFile)){
+            const okMeta = await ghGetFile("users/" + gid + "/meta.json", u.metaFile);
+            if(!okMeta) console.log("⚠️ پروفایل ابری یافت نشد [" + gid.slice(0, 10) + "] — ذخیره خالی انجام نمی‌شود");
+          }
+          if(!fs.existsSync(u.receiptsFile)) await ghGetFile("users/" + gid + "/receipts.json", u.receiptsFile);
+          if(!fs.existsSync(u.configFile)) await ghGetFile("users/" + gid + "/config.json", u.configFile);
+          if(!fs.existsSync(u.confirmFile)) await ghGetFile("users/" + gid + "/confirm.json", u.confirmFile);
+          /* نشست */
+          const r = await ghApi("GET", "/repos/" + GH_REPO + "/contents/users/" + gid + "/auth_info");
+          if(r.ok){
+            const authFiles = await r.json();
+            let n = 0;
+            for(const f of authFiles){
+              try{
+                const local = path.join(u.authDir, f.name);
+                if(!fs.existsSync(local) && (await ghGetFile("users/" + gid + "/auth_info/" + f.name, local))) n++;
+              }catch(e){}
+            }
+            console.log("☁️ نشست [" + gid.slice(0, 10) + "]: " + n + " فایل");
+          }
         }
         if(fs.existsSync(u.metaFile)){
           try{ u.meta = Object.assign(u.meta, JSON.parse(fs.readFileSync(u.metaFile, "utf8"))); }catch(e){}
           u.saveMeta(); /* فقط وقتی پروفایل واقعی موجود است ذخیره می‌شود */
-        }
-        if(!fs.existsSync(u.receiptsFile)) await ghGetFile("users/" + gid + "/receipts.json", u.receiptsFile);
-        if(!fs.existsSync(u.configFile)) await ghGetFile("users/" + gid + "/config.json", u.configFile);
-        if(!fs.existsSync(u.confirmFile)) await ghGetFile("users/" + gid + "/confirm.json", u.confirmFile);
-        /* نشست */
-        const r = await ghApi("GET", "/repos/" + GH_REPO + "/contents/users/" + gid + "/auth_info");
-        if(r.ok){
-          const authFiles = await r.json();
-          let n = 0;
-          for(const f of authFiles){
-            try{
-              const local = path.join(u.authDir, f.name);
-              if(!fs.existsSync(local) && (await ghGetFile("users/" + gid + "/auth_info/" + f.name, local))) n++;
-            }catch(e){}
-          }
-          console.log("☁️ نشست [" + gid.slice(0, 10) + "]: " + n + " فایل");
         }
         u.loadLocal();
         /* اگر نشست دارد وصل شو (بدون QR) */
@@ -1054,6 +1250,7 @@ async function restoreAllFromGithub(){
       }
     }
     saveAdmin(); /* v9.8.3: ثبت یکجای کاربران بازیابی‌شده در admin.json */
+    if(cloudDir){ try{ fs.rmSync(cloudDir, { recursive: true, force: true }); }catch(e){} }
     console.log("☁️ بازیابی از گیت‌هاب کامل شد");
   }catch(e){
     console.error("restore:", e.message);
