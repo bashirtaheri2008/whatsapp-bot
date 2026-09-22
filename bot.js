@@ -1130,6 +1130,9 @@ function saveUserIndex(){
 async function restoreAllFromGithub(){
   if(!cloudEnabled()){
     console.log("☁️ بکاپ ابری غیرفعال (GITHUB_TOKEN ست نشده)");
+    /* v10.2: بدون بکاپ ابری هم سیاست ادمین و کاربران نام‌کاربری/رمز از دیسک بارگذاری شوند */
+    loadAdmin();
+    loadCredentials();
     return;
   }
   /* v9.9.2: با سهمیه‌ی تمام‌شده بازیابی نمی‌کنیم و پوش را تا ریست می‌بندیم */
@@ -1302,6 +1305,60 @@ const SESSION_COOKIE = "wasid";
 const SLOT_COOKIE = "waslot";
 const SLOT_SEP = "--";
 function slotKey(gid, slot){ return (slot && slot > 1) ? gid + SLOT_SEP + slot : gid; }
+/* v10.2: پلن‌های اشتراک — رایگان / پرو / ویژه */
+const PLANS = {
+  free:    { name: "رایگان", price: "۰ افغانی / هفته",     days: 7,  maxSlots: 1,  maxGroups: 7, dailyReceipts: 100, bothFeatures: false,
+             features: ["۱ حساب واتساپ", "حداکثر ۷ گروه", "۱۰۰ فیش در روز", "یک قابلیت همزمان (دریافت یا تأیید)", "اعتبار ۷ روز"] },
+  pro:     { name: "پرو",    price: "۵۰۰ افغانی / ماه",     days: 30, maxSlots: 3,  maxGroups: 0, dailyReceipts: 0, bothFeatures: true,
+             features: ["تا ۳ حساب واتساپ", "گروه‌های نامحدود", "فیش نامحدود", "هر دو قابلیت همزمان", "تأیید و تأیید کننده بدون محدودیت", "اعتبار ۳۰ روز"] },
+  premium: { name: "ویژه",   price: "۹۹۹ افغانی / ۳ ماه",   days: 90, maxSlots: 20, maxGroups: 0, dailyReceipts: 0, bothFeatures: true,
+             features: ["حساب‌های واتساپ نامحدود", "همه امکانات پرو", "همه امکانات جدید در آینده", "همه امکانات همزمان", "اعتبار ۹۰ روز"] }
+};
+
+function planInfo(gidBase){
+  let u = users.get(gidBase);
+  if(!u) u = ensureUser(gidBase, {});
+  const now = Date.now();
+  let p = u.meta.plan;
+  if(!p || !PLANS[p.type]){
+    p = { type: "free", at: now, expires: now + PLANS.free.days * 86400000 };
+    u.meta.plan = p;
+    u.saveMeta();
+  }
+  const cfg = PLANS[p.type];
+  return { u, p, cfg, type: p.type, expired: now > p.expires };
+}
+
+function planPublic(gidBase){
+  const info = planInfo(gidBase);
+  const now = Date.now();
+  return {
+    type: info.type, name: info.cfg.name, price: info.cfg.price,
+    expiresAt: info.p.expires,
+    daysLeft: Math.max(0, Math.ceil((info.p.expires - now) / 86400000)),
+    expired: info.expired,
+    maxSlots: info.cfg.maxSlots, maxGroups: info.cfg.maxGroups,
+    dailyReceipts: info.cfg.dailyReceipts, bothFeatures: info.cfg.bothFeatures,
+    usedToday: (info.u.meta.usage && info.u.meta.usage.day === new Date().toISOString().slice(0, 10)) ? info.u.meta.usage.count : 0
+  };
+}
+
+/* شمارش فیش روزانه — false = سقف رسیده یا پلن منقضی */
+function usageBump(gidBase){
+  const info = planInfo(gidBase);
+  if(info.expired) return false;
+  if(!info.cfg.dailyReceipts) return true; /* نامحدود */
+  const t = new Date().toISOString().slice(0, 10);
+  let us = info.u.meta.usage || {};
+  if(us.day !== t) us = { day: t, count: 0 };
+  if(us.count >= info.cfg.dailyReceipts) return false;
+  us.count++;
+  info.u.meta.usage = us;
+  info.u.saveMeta();
+  return true;
+}
+
+function toFaDigits(n){ return String(n).replace(/\d/g, d => "۰۱۲۳۴۵۶۷۸۹"[+d]); }
 function parseSlotKey(key){
   key = String(key || "");
   const i = key.indexOf(SLOT_SEP);
@@ -1849,6 +1906,11 @@ class UserBot {
           /* از اینجا به بعد فقط پیام‌های جدید (notify) */
           if(type !== "notify") continue;
 
+          /* v10.2: کنترل پلن — پلن منقضی → ربات کاملاً غیرفعال */
+          const baseGid = parseSlotKey(this.gid).gid;
+          const pInfo = planInfo(baseGid);
+          if(pInfo.expired) continue;
+
           /* جریان واسطه تایید فیش — مستقل از ربات اصلی */
           const hasVerifierTarget = (this.confirmCfg.ownerJid || (this.confirmCfg.verifierGroups || []).length > 0);
           const isVerifierGroupJid = (this.confirmCfg.verifierGroups || []).some(v => v.jid === rJid);
@@ -1858,6 +1920,10 @@ class UserBot {
               if(cType === "image" || cType === "pdf"){
                 const senderJidC = msg.key.participant || rJid;
                 const senderNumC = senderJidC.split("@")[0].split(":")[0];
+                if(!usageBump(baseGid)){
+                  console.log("⛔ [" + this.gid.slice(0, 10) + "] سقف فیش روزانه پلن " + pInfo.cfg.name + " پر شد — فیش نادیده گرفته شد");
+                  continue;
+                }
                 console.log("📩 [" + this.gid.slice(0, 10) + "] تایید: ورودی از", senderNumC, "| گروه:", this.groupNameOf(rJid) || rJid);
                 this.enqueueTask(() => this.processConfirmTask(msg, cType));
               }
@@ -1879,6 +1945,10 @@ class UserBot {
 
           if(msgType !== "image" && msgType !== "pdf") continue;
 
+          if(!usageBump(baseGid)){
+            console.log("⛔ [" + this.gid.slice(0, 10) + "] سقف فیش روزانه پلن " + pInfo.cfg.name + " پر شد — فیش نادیده گرفته شد");
+            continue;
+          }
           console.log("📥 [" + this.gid.slice(0, 10) + "] ورودی از:", senderNumber, "| نوع:", msgType);
           this.enqueueTask(() => this.processReceiptTask(msg, msgType, senderNumber));
 
@@ -2617,6 +2687,10 @@ app.post("/api/select-group", (req, res) => {
     u.saveConfig(); u.broadcastState();
     return res.json({ ok: true, selected: false, count: u.runtimeConfig.targetGroups.length });
   }
+  /* v10.2: سقف گروه بر اساس پلن */
+  const info = planInfo(parseSlotKey(u.gid).gid);
+  if(info.cfg.maxGroups > 0 && u.runtimeConfig.targetGroups.length >= info.cfg.maxGroups)
+    return res.status(403).json({ ok: false, error: "پلن " + info.cfg.name + " اجازه بیشتر از " + toFaDigits(info.cfg.maxGroups) + " گروه نمی‌دهد — ارتقا بده" });
   u.runtimeConfig.targetGroups.push({ jid, name: name || "" });
   u.saveConfig(); u.broadcastState();
   res.json({ ok: true, selected: true, count: u.runtimeConfig.targetGroups.length });
@@ -2632,7 +2706,11 @@ app.post("/api/clear-group", (req, res) => {
 app.post("/api/select-all-groups", (req, res) => {
   const u = req.user;
   if(!adminOverrides(u.gid).allowDup) return res.status(403).json({ ok: false, error: "بخش فیش تکراری برای شما فعال نیست" });
-  u.runtimeConfig.targetGroups = (u.groupsCache || []).map(g => ({ jid: g.jid, name: g.name || "" }));
+  let all = (u.groupsCache || []).map(g => ({ jid: g.jid, name: g.name || "" }));
+  /* v10.2: سقف گروه بر اساس پلن */
+  const info = planInfo(parseSlotKey(u.gid).gid);
+  if(info.cfg.maxGroups > 0 && all.length > info.cfg.maxGroups) all = all.slice(0, info.cfg.maxGroups);
+  u.runtimeConfig.targetGroups = all;
   u.saveConfig(); u.broadcastState();
   res.json({ ok: true, count: u.runtimeConfig.targetGroups.length });
 });
@@ -2649,7 +2727,15 @@ app.post("/api/allowed-numbers", (req, res) => {
 app.post("/api/toggle", (req, res) => {
   const u = req.user;
   if(!adminOverrides(u.gid).allowDup) return res.status(403).json({ ok: false, error: "بخش فیش تکراری برای شما فعال نیست" });
-  u.runtimeConfig.enabled = !!req.body.enabled;
+  const on = !!req.body.enabled;
+  const info = planInfo(parseSlotKey(u.gid).gid);
+  if(on && info.expired) return res.status(403).json({ ok: false, error: "پلن منقضی شده — از تنظیمات پلن را تمدید کن" });
+  u.runtimeConfig.enabled = on;
+  /* v10.2: پلن رایگان — روشن کردن یک قابلیت، دیگری را خاموش می‌کند */
+  if(on && !info.cfg.bothFeatures && u.confirmCfg.enabled){
+    u.confirmCfg.enabled = false;
+    u.saveConfirm();
+  }
   u.saveConfig(); u.broadcastState();
   res.json({ ok: true });
 });
@@ -2668,7 +2754,15 @@ app.get("/api/confirm", (req, res) => res.json(req.user.confirmPublic()));
 app.post("/api/confirm/toggle", (req, res) => {
   const u = req.user;
   if(!adminOverrides(u.gid).allowConfirm) return res.status(403).json({ ok: false, error: "بخش فیش به تأیید برای شما فعال نیست" });
-  u.confirmCfg.enabled = !!req.body.enabled;
+  const on = !!req.body.enabled;
+  const info = planInfo(parseSlotKey(u.gid).gid);
+  if(on && info.expired) return res.status(403).json({ ok: false, error: "پلن منقضی شده — از تنظیمات پلن را تمدید کن" });
+  u.confirmCfg.enabled = on;
+  /* v10.2: پلن رایگان — روشن کردن تأیید، دریافت فیش را خاموش می‌کند */
+  if(on && !info.cfg.bothFeatures && u.runtimeConfig.enabled){
+    u.runtimeConfig.enabled = false;
+    u.saveConfig();
+  }
   u.saveConfirm(); u.broadcastState();
   res.json({ ok: true });
 });
@@ -2806,6 +2900,25 @@ function listSlots(gid){
   return { slots, nextSlot: Math.min(max + 1, 99) };
 }
 
+/* v10.2: پلن اشتراک — مشاهده و فعال‌سازی (فعلاً کلیکی؛ پرداخت واقعی بعداً) */
+app.get("/api/plan", (req, res) => {
+  const gid = parseSlotKey(req.user.gid).gid;
+  const plans = Object.keys(PLANS).map(k => ({ type: k, name: PLANS[k].name, price: PLANS[k].price, features: PLANS[k].features }));
+  res.json({ ok: true, plan: planPublic(gid), plans });
+});
+
+app.post("/api/plan/set", (req, res) => {
+  const gid = parseSlotKey(req.user.gid).gid;
+  const type = String((req.body || {}).type || "");
+  if(!PLANS[type]) return res.status(400).json({ ok: false, error: "پلن نامعتبر است" });
+  const info = planInfo(gid);
+  const now = Date.now();
+  info.u.meta.plan = { type, at: now, expires: now + PLANS[type].days * 86400000 };
+  info.u.saveMeta();
+  console.log("💳 پلن " + PLANS[type].name + " فعال شد — " + gid.slice(0, 12));
+  res.json({ ok: true, plan: planPublic(gid) });
+});
+
 app.get("/api/slots", (req, res) => {
   const gid = parseSlotKey(req.user.gid).gid;
   res.json(Object.assign({ ok: true, active: req.slot || 1 }, listSlots(gid)));
@@ -2827,6 +2940,10 @@ app.post("/api/slot", (req, res) => {
 /* افزودن شماره جدید — اسلات بعدی ساخته و فعال می‌شود؛ QR از همان جریان همیشگی می‌آید */
 app.post("/api/slot/add", (req, res) => {
   const gid = parseSlotKey(req.user.gid).gid;
+  const info = planInfo(gid);
+  if(info.expired) return res.status(403).json({ ok: false, error: "پلن منقضی شده — اول از تنظیمات پلن را تمدید کن" });
+  const cur = listSlots(gid).slots.filter(s => s.exists).length;
+  if(cur >= info.cfg.maxSlots) return res.status(403).json({ ok: false, error: "پلن " + info.cfg.name + " اجازه بیشتر از " + toFaDigits(info.cfg.maxSlots) + " حساب نمی‌دهد — از تنظیمات ارتقا بده" });
   const { nextSlot } = listSlots(gid);
   if(nextSlot >= 99) return res.status(400).json({ ok: false, error: "حداکثر تعداد حساب رسیده است" });
   const key = slotKey(gid, nextSlot);

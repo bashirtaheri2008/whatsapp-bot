@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#0a0f0d">
+<meta name="theme-color" content="#f6f9f7">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="mobile-web-app-capable" content="yes">
@@ -13,46 +13,80 @@
 <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#0a0f0d;
-  --bg-1:#0f1613;
-  --bg-2:#141e1a;
-  --bg-3:#1b2721;
-  --bg-3-hover:#20302a;
-  --border:#22302a;
-  --border-soft:#182420;
-  --accent:#25e37f;
-  --accent-dim:#1aa860;
-  --accent-ink:#00190f;
-  --accent-glow:rgba(37,227,127,.16);
-  --text:#eef6f1;
-  --text-dim:#8ea299;
-  --text-faint:#576860;
+  --bg:#f6f9f7;
+  --bg-1:#eef2f0;
+  --bg-2:#ffffff;
+  --bg-2-top:#ffffff;
+  --bg-3:#eef2ef;
+  --bg-3-hover:#e3ebe6;
+  --border:#dbe4de;
+  --border-soft:#e7eeea;
+  --accent:#22e08a;
+  --accent-2:#17c9e8;
+  --accent-dim:#189d5f;
+  --accent-ink:#02160c;
+  --accent-glow:rgba(19,168,102,.13);
+  --accent-glow-strong:rgba(19,168,102,.28);
+  --text:#101715;
+  --text-dim:#5c6b63;
+  --text-faint:#8b9a92;
   --danger:#f2596b;
-  --danger-soft:rgba(242,89,107,.14);
+  --danger-soft:rgba(224,60,80,.10);
   --warning:#f0b640;
-  --warning-soft:rgba(240,182,64,.14);
+  --warning-soft:rgba(217,155,20,.12);
   --info:#4fb3e8;
+  --info-soft:rgba(45,146,201,.12);
+  --r-xl:26px;
   --r-lg:20px;
   --r-md:14px;
   --r-sm:10px;
+  --shadow-card:0 1px 0 rgba(255,255,255,.7) inset, 0 10px 26px -18px rgba(20,40,30,.16);
+  --shadow-pop:0 20px 44px -20px rgba(20,40,30,.28);
+  --glass-bg:rgba(255,255,255,.72);
   --safe-top:env(safe-area-inset-top);
   --safe-bottom:env(safe-area-inset-bottom);
-  --header-h:58px;
-  --nav-h:60px;
+  --header-h:60px;
+  --nav-h:76px;
+}
+:root[data-theme="dark"]{
+  --bg:#0a0d0c;
+  --bg-1:#0e1310;
+  --bg-2:#131a17;
+  --bg-2-top:#161e1a;
+  --bg-3:#1a2420;
+  --bg-3-hover:#212f29;
+  --border:#243029;
+  --border-soft:#1a2420;
+  --accent-ink:#02160c;
+  --accent-glow:rgba(34,224,138,.18);
+  --accent-glow-strong:rgba(34,224,138,.32);
+  --text:#f3f8f5;
+  --text-dim:#93a49b;
+  --text-faint:#59685f;
+  --danger-soft:rgba(242,89,107,.14);
+  --warning-soft:rgba(240,182,64,.14);
+  --info-soft:rgba(79,179,232,.14);
+  --shadow-card:0 1px 0 rgba(255,255,255,.03) inset, 0 10px 30px -18px rgba(0,0,0,.6);
+  --shadow-pop:0 20px 50px -20px rgba(0,0,0,.65);
+  --glass-bg:rgba(11,16,14,.78);
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;overflow:hidden;overscroll-behavior:none;touch-action:manipulation}
 body{
-  margin:0;background:var(--bg);color:var(--text);
+  margin:0;color:var(--text);
+  background:
+    radial-gradient(900px 480px at 85% -8%, rgba(34,224,138,.09), transparent 60%),
+    radial-gradient(700px 420px at -10% 10%, rgba(23,201,232,.06), transparent 55%),
+    var(--bg);
   font-family:'Vazirmatn',-apple-system,BlinkMacSystemFont,"Segoe UI",Tahoma,Arial,sans-serif;
   height:100dvh;position:relative;
   -webkit-font-smoothing:antialiased;
+  letter-spacing:-.005em;
 }
 button,input{font-family:inherit}
 ::selection{background:var(--accent-glow);color:var(--text)}
 
 /* ===================== ICONS ===================== */
-/* Lucide رسمی — svg خودش fill/stroke را به‌صورت attribute دارد؛ فقط سایز اینجا */
 .icon{width:20px;height:20px;flex-shrink:0}
 .ico-badge svg{width:16px;height:16px}
 .del-btn svg{width:15px;height:15px}
@@ -63,52 +97,80 @@ button,input{font-family:inherit}
 .app-header{
   flex-shrink:0;height:calc(var(--header-h) + var(--safe-top));
   padding-top:var(--safe-top);
-  display:flex;align-items:center;gap:11px;padding-inline:16px;
-  background:rgba(14,21,18,.92);backdrop-filter:blur(14px) saturate(140%);
+  display:flex;align-items:center;gap:12px;padding-inline:18px;
+  background:var(--glass-bg);backdrop-filter:blur(20px) saturate(160%);
   border-bottom:1px solid var(--border-soft);
   position:relative;z-index:40;
 }
 .brandmark{
-  width:34px;height:34px;border-radius:11px;flex-shrink:0;position:relative;
-  background:linear-gradient(150deg,var(--accent),var(--accent-dim));
+  width:36px;height:36px;border-radius:12px;flex-shrink:0;position:relative;
+  background:linear-gradient(150deg,var(--accent),var(--accent-2));
   display:flex;align-items:center;justify-content:center;color:var(--accent-ink);
+  box-shadow:0 6px 16px -4px var(--accent-glow-strong);
 }
-.brandmark img{display:none;width:100%;height:100%;border-radius:11px;object-fit:cover}
+.brandmark img{display:none;width:100%;height:100%;border-radius:50%;object-fit:cover}
+.brandmark.has-avatar{border-radius:50%}
 .brandmark.has-avatar .icon{display:none}
 .brandmark.has-avatar img{display:block}
 .brandmark .pulse-dot{
-  position:absolute;bottom:-2px;left:-2px;width:11px;height:11px;border-radius:50%;
-  background:var(--accent);border:2px solid var(--bg-1);display:none;
+  position:absolute;bottom:-2px;left:-2px;width:12px;height:12px;border-radius:50%;
+  background:var(--accent);border:2.5px solid var(--bg);display:none;
 }
 .brandmark .pulse-dot.on{display:block}
 .brandmark .pulse-dot.on::after{
   content:"";position:absolute;inset:-2px;border-radius:50%;background:var(--accent);
   opacity:.55;animation:pulse-ring 1.8s ease-out infinite;
 }
-@keyframes pulse-ring{0%{transform:scale(.6);opacity:.55}100%{transform:scale(2.1);opacity:0}}
+@keyframes pulse-ring{0%{transform:scale(.6);opacity:.55}100%{transform:scale(2.2);opacity:0}}
 
 .header-titles{flex:1;min-width:0}
-.header-titles h1{margin:0;font-size:14.5px;font-weight:700;line-height:1.3}
+.header-titles h1{margin:0;font-size:14.5px;font-weight:700;line-height:1.3;letter-spacing:-.01em}
 .header-titles .sub{font-size:11px;color:var(--text-faint);direction:ltr;text-align:right;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 .status-pill{
-  padding:5px 11px;border-radius:20px;font-size:11.5px;font-weight:700;
-  background:var(--bg-3);color:var(--text-dim);display:flex;align-items:center;gap:5px;flex-shrink:0;
+  padding:6px 12px;border-radius:20px;font-size:11.5px;font-weight:700;
+  background:var(--bg-3);color:var(--text-dim);display:flex;align-items:center;gap:6px;flex-shrink:0;
+  border:1px solid var(--border-soft);
 }
 .status-pill .dot{width:7px;height:7px;border-radius:50%;background:currentColor}
-.status-pill.ok{background:rgba(37,227,127,.13);color:var(--accent)}
-.status-pill.err{background:var(--danger-soft);color:var(--danger)}
-.status-pill.busy{background:var(--warning-soft);color:var(--warning)}
+.status-pill.ok{background:rgba(34,224,138,.12);color:var(--accent);border-color:rgba(34,224,138,.22)}
+.status-pill.ok .dot{box-shadow:0 0 0 3px rgba(34,224,138,.18)}
+.status-pill.err{background:var(--danger-soft);color:var(--danger);border-color:rgba(242,89,107,.22)}
+.status-pill.busy{background:var(--warning-soft);color:var(--warning);border-color:rgba(240,182,64,.22)}
+
+/* ===================== CONNECT BANNER ===================== */
+.connect-banner{
+  display:flex;align-items:flex-start;gap:12px;
+  margin:12px 16px 0;padding:14px 16px 16px;position:relative;flex-shrink:0;
+  background:linear-gradient(160deg,rgba(240,182,64,.14),transparent 60%),
+             linear-gradient(180deg,var(--bg-2-top),var(--bg-2));
+  border:1px solid rgba(240,182,64,.28);border-radius:var(--r-lg);
+  box-shadow:var(--shadow-card);z-index:30;
+  animation:panel-in .25s ease both;
+}
+.connect-banner-close{
+  position:absolute;top:8px;left:8px;background:transparent;border:0;color:var(--text-faint);
+  width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:8px;cursor:pointer;
+}
+.connect-banner-close:active{background:var(--bg-3)}
+.connect-banner-icon{
+  width:38px;height:38px;border-radius:11px;background:var(--warning-soft);color:var(--warning);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.connect-banner-body{flex:1;min-width:0;padding-inline-end:22px}
+.connect-banner-title{font-size:13.5px;font-weight:700}
+.connect-banner-sub{font-size:11.5px;color:var(--text-dim);margin-top:4px;line-height:1.7}
+.connect-banner-actions{display:flex;gap:8px;margin-top:12px}
 
 /* ===================== PANELS ===================== */
 .panels{flex:1;position:relative;overflow:hidden}
 .panel{
-  position:absolute;inset:0;overflow-y:auto;padding:16px;padding-bottom:28px;
-  display:none;flex-direction:column;gap:12px;
-  animation:panel-in .22s ease both;
+  position:absolute;inset:0;overflow-y:auto;padding:16px;padding-bottom:32px;
+  display:none;flex-direction:column;gap:14px;
+  animation:panel-in .28s cubic-bezier(.25,.8,.4,1) both;
 }
 .panel.active{display:flex}
-@keyframes panel-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+@keyframes panel-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 @media (prefers-reduced-motion: reduce){.panel{animation:none}}
 
 .panel::-webkit-scrollbar,.group-list::-webkit-scrollbar,.receipt-list::-webkit-scrollbar{width:5px}
@@ -116,89 +178,108 @@ button,input{font-family:inherit}
 
 .section-title{
   display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700;
-  color:var(--text-dim);padding:2px 2px 0;
+  color:var(--text-dim);padding:4px 2px 0;
 }
 .section-title .spacer{margin-inline-start:auto}
 
-.card{background:var(--bg-2);border:1px solid var(--border-soft);border-radius:var(--r-lg);padding:16px}
-.card-head{display:flex;align-items:center;gap:9px;margin-bottom:13px}
-.card-head .ico-badge{
-  width:30px;height:30px;border-radius:9px;background:var(--bg-3);color:var(--accent);
-  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+.card{
+  background:linear-gradient(180deg,var(--bg-2-top),var(--bg-2));
+  border:1px solid var(--border-soft);border-radius:var(--r-xl);padding:17px;
+  box-shadow:var(--shadow-card);
 }
-.card-head h2{margin:0;font-size:13.5px;font-weight:700;flex:1}
+.card-head{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.card-head .ico-badge{
+  width:32px;height:32px;border-radius:10px;
+  background:linear-gradient(150deg,var(--bg-3),var(--bg-3-hover));
+  color:var(--accent);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  border:1px solid var(--border-soft);
+}
+.card-head h2{margin:0;font-size:13.5px;font-weight:700;flex:1;letter-spacing:-.01em}
 .card-head .count{font-size:11px;color:var(--text-faint);font-weight:600}
 
 /* ===================== BUTTONS ===================== */
 .btn{
   padding:10px 16px;border-radius:var(--r-sm);border:0;font-size:13.5px;font-weight:700;
-  cursor:pointer;transition:transform .12s,opacity .2s,background .15s;
+  cursor:pointer;transition:transform .12s,opacity .2s,background .15s,box-shadow .2s;
   display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap;
 }
 .btn:active{transform:scale(.95)}
 .btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
-.btn-primary{background:var(--accent);color:var(--accent-ink)}
-.btn-secondary{background:var(--bg-3);color:var(--text)}
+.btn-primary{
+  background:linear-gradient(135deg,var(--accent),var(--accent-dim));color:var(--accent-ink);
+  box-shadow:0 8px 20px -8px var(--accent-glow-strong);
+}
+.btn-secondary{background:var(--bg-3);color:var(--text);border:1px solid var(--border-soft)}
+.btn-secondary:active{background:var(--bg-3-hover)}
 .btn-danger{background:var(--danger-soft);color:var(--danger)}
 .btn-block{width:100%}
 .btn-sm{padding:7px 12px;font-size:12px}
-.btn-icon{width:32px;height:32px;padding:0;border-radius:9px;background:var(--bg-3);color:var(--text-dim)}
+.btn-icon{width:33px;height:33px;padding:0;border-radius:10px;background:var(--bg-3);color:var(--text-dim);border:1px solid var(--border-soft)}
 .btn-icon:active{background:var(--bg-3-hover)}
 
 /* ===================== DASHBOARD: active group ===================== */
 .active-group-card{
-  background:linear-gradient(160deg,rgba(37,227,127,.10),transparent 60%),var(--bg-2);
+  background:linear-gradient(160deg,rgba(34,224,138,.12),transparent 60%),
+             linear-gradient(180deg,var(--bg-2-top),var(--bg-2));
   border:1px solid var(--border-soft);
 }
 .selected-info{display:flex;align-items:center;gap:12px;margin-bottom:12px}
 .selected-info .avatar{
-  width:46px;height:46px;border-radius:14px;flex-shrink:0;
-  background:linear-gradient(150deg,var(--accent),var(--accent-dim));
+  width:48px;height:48px;border-radius:15px;flex-shrink:0;
+  background:linear-gradient(150deg,var(--accent),var(--accent-2));
   display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:800;color:var(--accent-ink);
+  box-shadow:0 8px 18px -6px var(--accent-glow-strong);
 }
 .selected-info .details{flex:1;min-width:0}
 .selected-info .name{font-size:14.5px;font-weight:700}
 .selected-info .jid{font-size:11.5px;color:var(--text-dim);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
-.empty{text-align:center;padding:26px 16px;color:var(--text-dim);font-size:12.5px;display:flex;flex-direction:column;align-items:center;gap:4px}
-.empty .icon{width:34px;height:34px;color:var(--text-faint);margin-bottom:6px}
-.empty p{margin:0}
+.empty{text-align:center;padding:30px 16px;color:var(--text-dim);font-size:12.5px;display:flex;flex-direction:column;align-items:center;gap:4px}
+.empty .icon{width:36px;height:36px;color:var(--text-faint);margin-bottom:8px;opacity:.7}
+.empty p{margin:0;font-weight:600}
 .empty .hint{font-size:11.5px;color:var(--text-faint)}
 
 /* ===================== STATS ===================== */
-.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:9px}
 .stat-box{
-  background:var(--bg-3);border-radius:var(--r-md);padding:12px 8px;text-align:center;
-  display:flex;flex-direction:column;align-items:center;gap:5px;
+  background:var(--bg-3);border-radius:var(--r-md);padding:13px 8px;text-align:center;
+  display:flex;flex-direction:column;align-items:center;gap:6px;
+  border:1px solid var(--border-soft);
 }
 .stat-box .ico{color:var(--accent);width:16px;height:16px}
-.stat-box .num{font-size:19px;font-weight:800;direction:ltr}
-.stat-box .lbl{font-size:10.5px;color:var(--text-faint)}
+.stat-box .num{font-size:19px;font-weight:800;direction:ltr;letter-spacing:-.02em}
+.stat-box .lbl{font-size:10.5px;color:var(--text-faint);font-weight:600}
 
 /* ===================== TOGGLE ===================== */
-.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:11px 0}
+.settings-subsection + .settings-subsection{border-top:1px solid var(--border-soft);margin-top:10px;padding-top:10px}
+.settings-subtitle{font-size:11.5px;font-weight:700;color:var(--text-dim);margin-bottom:2px}
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;gap:12px}
 .toggle-row + .toggle-row{border-top:1px solid var(--border-soft)}
 .toggle-label{font-size:13.5px;font-weight:500}
-.toggle-label .sub{display:block;font-size:11px;color:var(--text-faint);font-weight:400;margin-top:2px}
-.toggle-switch{width:46px;height:27px;background:var(--bg-3);border-radius:14px;position:relative;cursor:pointer;transition:background .2s;flex-shrink:0}
-.toggle-switch::after{content:"";position:absolute;top:3px;right:3px;width:21px;height:21px;background:#fff;border-radius:50%;transition:transform .25s cubic-bezier(.34,1.4,.64,1);box-shadow:0 2px 6px rgba(0,0,0,.3)}
-.toggle-switch.on{background:var(--accent)}
-.toggle-switch.on::after{transform:translateX(-19px)}
+.toggle-label .sub{display:block;font-size:11px;color:var(--text-faint);font-weight:400;margin-top:3px;line-height:1.6}
+.toggle-switch{width:48px;height:28px;background:var(--bg-3);border:1px solid var(--border-soft);border-radius:14px;position:relative;cursor:pointer;transition:background .2s,border-color .2s;flex-shrink:0}
+.toggle-switch::after{content:"";position:absolute;top:2.5px;right:2.5px;width:21px;height:21px;background:#fff;border-radius:50%;transition:transform .25s cubic-bezier(.34,1.4,.64,1);box-shadow:0 2px 6px rgba(0,0,0,.3)}
+.toggle-switch.on{background:linear-gradient(135deg,var(--accent),var(--accent-dim));border-color:transparent}
+.toggle-switch.on::after{transform:translateX(-20px)}
 
 /* ===================== GROUPS ===================== */
 .group-list{display:flex;flex-direction:column;gap:8px}
+.group-list .load-more,.receipt-list .load-more{margin-top:2px;flex-shrink:0}
 .group-item{
-  background:var(--bg-3);border:1.5px solid transparent;border-radius:var(--r-md);
-  padding:11px 12px;cursor:pointer;transition:border-color .15s,background .15s;
+  background:var(--bg-3);border:1.5px solid var(--border-soft);border-radius:var(--r-md);
+  padding:11px 12px;cursor:pointer;transition:border-color .15s,background .15s,transform .12s;
   display:flex;align-items:center;gap:10px;
 }
-.group-item:active{background:var(--bg-3-hover)}
-.group-item.selected{border-color:var(--accent);background:rgba(37,227,127,.07)}
+.group-item:active{background:var(--bg-3-hover);transform:scale(.99)}
+.group-item.selected{border-color:var(--accent);background:rgba(34,224,138,.08)}
 .group-item .avatar{
   width:38px;height:38px;border-radius:12px;background:var(--bg-2);
   display:flex;align-items:center;justify-content:center;font-size:14.5px;font-weight:700;color:var(--text-dim);flex-shrink:0;
+  position:relative;overflow:hidden;
 }
-.group-item.selected .avatar{background:linear-gradient(150deg,var(--accent),var(--accent-dim));color:var(--accent-ink)}
+.group-item .avatar img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:inherit}
+.group-item.selected .avatar{background:linear-gradient(150deg,var(--accent),var(--accent-2));color:var(--accent-ink)}
 .group-item .info{flex:1;min-width:0}
 .group-item .name{font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .group-item .meta{font-size:11px;color:var(--text-faint);margin-top:2px}
@@ -213,162 +294,271 @@ button,input{font-family:inherit}
 @keyframes dot{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-6px);opacity:1}}
 
 /* ===================== RECEIPTS ===================== */
-.receipt-list{display:flex;flex-direction:column;gap:8px}
+.receipt-list{display:flex;flex-direction:column;gap:9px}
 .receipt-item{
-  background:var(--bg-3);border-radius:var(--r-md);padding:13px 14px 11px;font-size:13px;
-  display:flex;flex-direction:column;gap:7px;position:relative;
+  background:var(--bg-3);border:1px solid var(--border-soft);border-radius:var(--r-md);padding:14px 15px 12px;font-size:13px;
+  display:flex;flex-direction:column;gap:8px;position:relative;
 }
 .receipt-item .row2{display:flex;justify-content:space-between;gap:10px}
-.receipt-item .label{color:var(--text-faint);font-size:10.5px;margin-bottom:2px}
+.receipt-item .label{color:var(--text-faint);font-size:10.5px;margin-bottom:2px;font-weight:600}
 .receipt-item .value{font-weight:600;direction:ltr;text-align:left;word-break:break-all}
-.receipt-item .amount{color:var(--accent);font-size:16px;font-weight:800;direction:ltr}
+.receipt-item .amount{color:var(--accent);font-size:16.5px;font-weight:800;direction:ltr}
 .receipt-item .del-btn{
-  position:absolute;top:8px;left:8px;background:transparent;border:0;color:var(--text-faint);
-  width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:8px;cursor:pointer;
+  position:absolute;top:9px;left:9px;background:transparent;border:0;color:var(--text-faint);
+  width:27px;height:27px;display:flex;align-items:center;justify-content:center;border-radius:8px;cursor:pointer;
+  transition:background .15s,color .15s;
 }
 .receipt-item .del-btn:active{background:var(--danger-soft);color:var(--danger)}
 .receipt-item .sender-info{
   font-size:10.5px;color:var(--text-faint);border-top:1px solid var(--border-soft);
-  padding-top:7px;margin-top:2px;display:flex;align-items:center;flex-wrap:wrap;gap:6px;
+  padding-top:8px;margin-top:2px;display:flex;align-items:center;flex-wrap:wrap;gap:6px;
 }
 .receipt-item .sender-info b{color:var(--text-dim);font-weight:600}
-.badge-count{background:var(--accent);color:var(--accent-ink);padding:2px 8px;border-radius:10px;font-size:10.5px;font-weight:700}
+.badge-count{background:linear-gradient(135deg,var(--accent),var(--accent-dim));color:var(--accent-ink);padding:2px 9px;border-radius:10px;font-size:10.5px;font-weight:800}
+/* v10: چیپ شماره‌های واتساپ */
+.num-row{display:flex;flex-wrap:wrap;gap:8px}
+.num-chip{display:flex;align-items:center;gap:7px;padding:8px 12px;border-radius:14px;background:var(--bg-3);
+  border:1.5px solid var(--border);cursor:pointer;font-size:12.5px;font-weight:600;color:var(--text);
+  transition:background .15s,border-color .15s;position:relative;max-width:100%}
+.num-chip:active{transform:scale(.97)}
+.num-chip.active{border-color:var(--accent);background:var(--bg-3-hover)}
+.num-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;background:#9aa5a0}
+.num-dot.on{background:var(--accent);box-shadow:0 0 0 3px rgba(34,224,138,.18)}
+.num-dot.wait{background:#f5b540}
+.num-chip .num-x{margin-right:2px;color:#c0564f;font-weight:800;font-size:14px;padding:0 2px;line-height:1}
+.num-add{border-style:dashed;color:var(--accent-dim)}
+/* v10.1: مدیریت حساب‌ها در تنظیمات */
+/* v10.2: اشتراک و پلن */
+.plan-banner{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:10px 14px;border-radius:12px;margin-bottom:12px;font-size:12.5px;font-weight:600;
+  background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.25);color:var(--text)}
+.plan-banner.expired{background:rgba(229,115,104,.12);border-color:rgba(229,115,104,.45)}
+.plan-banner.expired .plan-days{color:#e57368}
+.plan-days{color:var(--text-dim);font-weight:500;font-size:11.5px}
+.plan-row{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--border);
+  border-radius:12px;margin-top:10px;background:var(--bg-3)}
+.plan-row.current{border-color:rgba(74,222,128,.5);background:rgba(74,222,128,.06)}
+.plan-row .p-info{flex:1;min-width:0}
+.plan-row .p-name{font-size:13.5px;font-weight:700;color:var(--text)}
+.plan-row .p-price{font-size:11.5px;color:#4ade80;font-weight:600;margin-top:1px}
+.plan-row .p-features{font-size:11px;color:var(--text-dim);margin-top:4px;line-height:1.7}
+.plan-btn{padding:7px 14px;border-radius:10px;border:none;background:#4ade80;color:#052e1c;
+  font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap}
+.plan-btn:active{transform:scale(.96)}
+.plan-btn[disabled]{background:transparent;border:1px solid rgba(74,222,128,.4);color:#4ade80;cursor:default}
+.aa-row{display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid var(--border)}
+.aa-row:last-child{border-bottom:none}
+.aa-info{flex:1;min-width:0}
+.aa-name{font-size:13.5px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.aa-sub{font-size:11px;color:var(--text-dim);margin-top:2px}
+.aa-btn{padding:6px 10px;border-radius:10px;border:1px solid var(--border);background:var(--bg-3);
+  color:var(--text);font-size:11.5px;font-weight:600;cursor:pointer;font-family:inherit}
+.aa-btn.danger{color:#e57368;border-color:rgba(229,115,104,.4)}
+.aa-btn:active{transform:scale(.96)}
+/* v10.2: پاپ‌آپ سفارشی به‌جای confirm/prompt مرورگر */
+.app-modal-overlay{position:fixed;inset:0;background:rgba(10,16,13,.5);backdrop-filter:blur(2px);
+  display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px;opacity:0;
+  transition:opacity .18s;}
+.app-modal-overlay.show{opacity:1}
+.app-modal-box{background:var(--bg-2);border-radius:var(--r-lg);box-shadow:var(--shadow-pop);
+  width:100%;max-width:340px;padding:22px 20px 18px;transform:translateY(10px) scale(.98);
+  transition:transform .18s;border:1px solid var(--border-soft)}
+.app-modal-overlay.show .app-modal-box{transform:translateY(0) scale(1)}
+.app-modal-title{font-size:15px;font-weight:800;color:var(--text);margin-bottom:8px}
+.app-modal-msg{font-size:13px;color:var(--text-dim);line-height:1.9;margin-bottom:16px}
+.app-modal-input{width:100%;box-sizing:border-box;padding:11px 12px;border-radius:var(--r-sm);
+  border:1.5px solid var(--border);background:var(--bg-3);color:var(--text);font-size:13.5px;
+  font-family:inherit;margin-bottom:16px;outline:none}
+.app-modal-input:focus{border-color:var(--accent)}
+.app-modal-actions{display:flex;gap:10px}
+.app-modal-actions button{flex:1;padding:11px 0;border-radius:var(--r-sm);border:none;
+  font-size:13.5px;font-weight:700;font-family:inherit;cursor:pointer}
+.app-modal-actions .am-cancel{background:var(--bg-3);color:var(--text-dim)}
+.app-modal-actions .am-ok{background:var(--accent);color:var(--accent-ink)}
+.app-modal-actions .am-ok.am-danger{background:var(--danger);color:#fff}
 .source-badge{padding:2px 8px;border-radius:7px;font-size:9.5px;font-weight:700}
-.source-image{background:rgba(37,227,127,.16);color:var(--accent)}
+.source-image{background:rgba(34,224,138,.16);color:var(--accent)}
 .source-pdf{background:var(--danger-soft);color:#ff8b96}
 
 /* ===================== KEYS ===================== */
-.key-item{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:var(--bg-3);border-radius:var(--r-sm);margin-bottom:6px;font-size:12px}
+.key-item{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--bg-3);border:1px solid var(--border-soft);border-radius:var(--r-sm);margin-bottom:6px;font-size:12px}
 .key-item:last-child{margin-bottom:0}
 .key-item .key-name{font-family:ui-monospace,"SF Mono",Consolas,monospace;direction:ltr;color:var(--text-dim);font-size:11.5px}
 .key-status{padding:3px 9px;border-radius:8px;font-size:10.5px;font-weight:700}
-.key-status.ok{background:rgba(37,227,127,.16);color:var(--accent)}
+.key-status.ok{background:rgba(34,224,138,.16);color:var(--accent)}
 .key-status.busy{background:var(--danger-soft);color:#ff8b96}
 
-.footnote{text-align:center;font-size:11px;color:var(--text-faint);padding:6px 0 2px}
+.footnote{text-align:center;font-size:11px;color:var(--text-faint);padding:8px 0 2px}
 
-/* ===================== BOTTOM NAV ===================== */
+/* ===================== BOTTOM NAV (Telegram-style floating pill) ===================== */
 .bottom-nav{
-  flex-shrink:0;position:relative;display:flex;
-  height:calc(var(--nav-h) + var(--safe-bottom));padding-bottom:var(--safe-bottom);
-  background:rgba(14,21,18,.92);backdrop-filter:blur(14px) saturate(140%);
-  border-top:1px solid var(--border-soft);z-index:40;
+  flex-shrink:0;position:relative;display:flex;align-items:stretch;
+  height:64px;margin:0 12px calc(12px + var(--safe-bottom));padding:6px;
+  border-radius:32px;background:var(--bg-2);
+  box-shadow:0 2px 14px rgba(0,0,0,.10),0 0 0 1px var(--border-soft);
+  z-index:40;
 }
 .nav-indicator{
-  position:absolute;top:6px;height:3px;width:28px;border-radius:3px;background:var(--accent);
-  transition:transform .28s cubic-bezier(.4,0,.2,1);transform:translateX(0);
-  box-shadow:0 0 10px var(--accent-glow);
+  position:absolute;top:6px;bottom:6px;left:0;width:0;border-radius:26px;
+  background:var(--accent-glow);pointer-events:none;
+  transition:transform .3s cubic-bezier(.3,.9,.3,1),width .3s cubic-bezier(.3,.9,.3,1);
+  transform:translateX(0);
 }
 .navbtn{
-  flex:1;background:transparent;border:0;display:flex;flex-direction:column;align-items:center;
-  justify-content:center;gap:3px;color:var(--text-faint);cursor:pointer;position:relative;padding:6px 2px 0;
-  transition:color .15s;
+  flex:1;min-width:0;background:transparent;border:0;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:2px;color:var(--text);cursor:pointer;position:relative;padding:0 2px;
+  transition:color .2s;z-index:1;
 }
-.navbtn .icon{transition:transform .15s}
+.navbtn .icon{width:26px;height:26px;transition:transform .18s cubic-bezier(.34,1.4,.64,1)}
 .navbtn:active .icon{transform:scale(.88)}
-.navbtn.active{color:var(--accent)}
-.navbtn span{font-size:10.5px;font-weight:600}
+.navbtn.active{color:var(--accent-dim)}
+.navbtn span{font-size:12px;font-weight:500;line-height:1.2;white-space:nowrap}
 .nav-badge{
-  position:absolute;top:2px;left:calc(50% + 2px);min-width:15px;height:15px;padding:0 3px;border-radius:8px;
+  position:absolute;top:4px;left:calc(50% + 6px);min-width:16px;height:16px;padding:0 4px;border-radius:8px;
   background:var(--danger);color:#fff;font-size:9px;font-weight:800;display:none;
-  align-items:center;justify-content:center;
+  align-items:center;justify-content:center;box-shadow:0 0 0 2px var(--bg-2);
 }
 .nav-badge.show{display:flex}
 
+/* ===================== EXCHANGE MENU ===================== */
+.ex-row{display:flex;align-items:center;gap:10px;padding:12px 0;cursor:pointer}
+.ex-row + .ex-row{border-top:1px solid var(--border-soft)}
+.ex-row:active{opacity:.7}
+.ex-row .toggle-label{flex:1;min-width:0}
+.ex-row .chev{width:18px;height:18px;color:var(--text-faint);flex-shrink:0}
+.ex-detail-btn{display:inline-flex;align-items:center;gap:2px;margin-top:8px;font-size:11.5px;font-weight:700;color:var(--accent)}
+.ex-detail-btn .icon{width:14px;height:14px}
+.row-badge{display:none;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--danger);color:#fff;font-size:10px;font-weight:800;align-items:center;justify-content:center;margin-inline-start:6px;vertical-align:middle}
+.row-badge.show{display:inline-flex}
+.back-btn{display:inline-flex;align-items:center;gap:4px;background:transparent;border:0;color:var(--accent);font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;padding:4px 2px}
+.back-btn .icon{width:16px;height:16px}
+
 /* ===================== CONFIRM PANEL ===================== */
 .confirm-flow{
-  display:flex;flex-direction:column;gap:8px;margin-top:12px;
-  padding:12px 14px;border-radius:12px;background:rgba(255,255,255,.04);
+  display:flex;flex-direction:column;gap:10px;margin-top:13px;
+  padding:13px 15px;border-radius:14px;background:rgba(255,255,255,.035);
+  border:1px solid var(--border-soft);
 }
-.cf-step{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--text-soft);direction:rtl}
+.cf-step{display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--text-dim);direction:rtl}
 .cf-step .icon{width:16px;height:16px;color:var(--accent);flex-shrink:0}
-.cq-pending{width:20px;height:20px;color:var(--text-soft);flex-shrink:0}
+.cq-pending{width:20px;height:20px;color:var(--text-dim);flex-shrink:0}
 .power-line{display:flex;align-items:center;gap:8px;font-size:16px}
 .power-line .icon{width:17px;height:17px;color:var(--accent)}
 .power-num{font-size:22px;font-weight:800}
 .owner-add{
-  display:flex;gap:8px;margin-top:12px;
+  display:flex;gap:8px;margin-top:13px;
 }
 .owner-add input{
-  flex:1;background:rgba(255,255,255,.06);border:1px solid var(--border-soft);
-  border-radius:10px;padding:9px 12px;color:var(--text);font-size:13px;direction:ltr;text-align:left;
+  flex:1;background:rgba(255,255,255,.05);border:1px solid var(--border);
+  border-radius:11px;padding:10px 13px;color:var(--text);font-size:13px;direction:ltr;text-align:left;
+  outline:none;transition:border-color .15s;
 }
+.owner-add input:focus{border-color:var(--accent-dim)}
 .hint-line{
-  font-size:11px;color:var(--text-soft);margin-top:8px;line-height:1.7;
+  font-size:11px;color:var(--text-faint);margin-top:10px;line-height:1.75;
 }
 .confirm-queue-item{
-  display:flex;align-items:center;gap:12px;padding:10px 4px;
+  display:flex;align-items:center;gap:12px;padding:11px 4px;
   border-bottom:1px solid var(--border-soft);
 }
 .confirm-queue-item:last-child{border-bottom:0}
 .cq-emoji{font-size:20px;width:24px;height:24px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .cq-info .name{font-size:13px;font-weight:600}
-.cq-info .meta{font-size:11.5px;color:var(--text-soft);margin-top:2px}
+.cq-info .meta{font-size:11.5px;color:var(--text-faint);margin-top:2px}
 
-/* ===================== ONBOARDING (pre-connection) ===================== */
+/* ===================== ONBOARDING / QR OVERLAY ===================== */
 #screenOnboarding{
+  position:fixed;inset:0;z-index:300;
   height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  padding:24px;gap:22px;text-align:center;
+  padding:24px;gap:24px;text-align:center;
+  background:
+    radial-gradient(900px 480px at 85% -8%, rgba(34,224,138,.10), transparent 60%),
+    radial-gradient(700px 420px at -10% 10%, rgba(23,201,232,.07), transparent 55%),
+    var(--bg);
 }
+.onb-close{
+  position:absolute;top:calc(var(--safe-top) + 16px);left:16px;
+  width:34px;height:34px;border-radius:11px;background:var(--bg-3);border:1px solid var(--border-soft);
+  color:var(--text-dim);display:flex;align-items:center;justify-content:center;cursor:pointer;
+}
+.onb-close:active{background:var(--bg-3-hover)}
 .onb-mark{
-  width:64px;height:64px;border-radius:20px;
-  background:linear-gradient(150deg,var(--accent),var(--accent-dim));
+  width:68px;height:68px;border-radius:22px;
+  background:linear-gradient(150deg,var(--accent),var(--accent-2));
   display:flex;align-items:center;justify-content:center;color:var(--accent-ink);
-  box-shadow:0 12px 32px var(--accent-glow);
+  box-shadow:0 16px 40px -8px var(--accent-glow-strong);
 }
-.onb-mark .icon{width:30px;height:30px}
-.onb-title{font-size:16px;font-weight:700;margin:0}
+.onb-mark .icon{width:31px;height:31px}
+.onb-title{font-size:17px;font-weight:800;margin:0;letter-spacing:-.01em}
 .onb-sub{font-size:12.5px;color:var(--text-dim);margin:0;max-width:280px;line-height:1.8}
 .qr-frame{
-  background:#fff;padding:14px;border-radius:18px;width:250px;height:250px;
+  background:#fff;padding:16px;border-radius:20px;width:250px;height:250px;
   display:flex;align-items:center;justify-content:center;
-  box-shadow:0 16px 40px rgba(0,0,0,.35);
+  box-shadow:var(--shadow-pop);
 }
 .qr-frame img{display:block;width:100%;height:100%;object-fit:contain;border-radius:6px}
 .onb-steps{
-  background:var(--bg-2);border:1px solid var(--border-soft);border-radius:var(--r-md);
-  padding:14px 16px;font-size:12.5px;color:var(--text-dim);line-height:2;max-width:300px;
+  background:linear-gradient(180deg,var(--bg-2-top),var(--bg-2));border:1px solid var(--border-soft);border-radius:var(--r-lg);
+  padding:15px 17px;font-size:12.5px;color:var(--text-dim);line-height:2;max-width:300px;
+  box-shadow:var(--shadow-card);
 }
 .onb-steps b{color:var(--accent)}
-.onb-status{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text-faint);font-weight:600}
-.onb-status .dot{width:7px;height:7px;border-radius:50%;background:var(--warning)}
-.onb-status.err .dot{background:var(--danger)}
+.onb-status{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-faint);font-weight:600}
+.onb-status .dot{width:7px;height:7px;border-radius:50%;background:var(--warning);box-shadow:0 0 0 4px var(--warning-soft)}
+.onb-status.err .dot{background:var(--danger);box-shadow:0 0 0 4px var(--danger-soft)}
 
 /* ===================== TOAST ===================== */
 #toast{
-  position:fixed;bottom:calc(var(--nav-h) + var(--safe-bottom) + 14px);left:50%;
+  position:fixed;bottom:calc(var(--nav-h) + var(--safe-bottom) + 16px);left:50%;
   transform:translateX(-50%) translateY(14px);
   background:var(--bg-3);color:var(--text);border:1px solid var(--border);
-  padding:10px 18px;border-radius:24px;font-size:12.5px;font-weight:600;z-index:200;
-  opacity:0;pointer-events:none;transition:all .25s cubic-bezier(.4,0,.2,1);
-  box-shadow:0 10px 28px rgba(0,0,0,.45);max-width:86vw;text-align:center;
+  padding:11px 20px;border-radius:24px;font-size:12.5px;font-weight:600;z-index:200;
+  opacity:0;pointer-events:none;transition:all .3s cubic-bezier(.34,1.2,.4,1);
+  box-shadow:var(--shadow-pop);max-width:86vw;text-align:center;
 }
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
 /* ===================== PIN LOCK ===================== */
-#lockScreen{position:fixed;inset:0;z-index:500;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:24px}
+#lockScreen{position:fixed;inset:0;z-index:500;
+  background:
+    radial-gradient(900px 480px at 85% -8%, rgba(34,224,138,.10), transparent 60%),
+    radial-gradient(700px 420px at -10% 10%, rgba(23,201,232,.07), transparent 55%),
+    var(--bg);
+  display:flex;align-items:center;justify-content:center;padding:24px}
 #lockScreen.hidden{display:none}
-.lock-inner{width:100%;max-width:300px;display:flex;flex-direction:column;align-items:center;gap:16px}
-.lock-badge{width:64px;height:64px;border-radius:22px;background:var(--bg-3);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--accent)}
-.lock-badge .icon{width:30px;height:30px}
-.lock-title{font-size:17px;font-weight:800;text-align:center}
-.lock-sub{font-size:12px;color:var(--text-dim);text-align:center;margin-top:4px}
+.lock-inner{width:100%;max-width:300px;display:flex;flex-direction:column;align-items:center;gap:18px}
+.lock-badge{width:68px;height:68px;border-radius:22px;background:linear-gradient(150deg,var(--bg-3),var(--bg-3-hover));border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--accent);box-shadow:var(--shadow-card)}
+.lock-badge .icon{width:31px;height:31px}
+.lock-title{font-size:17px;font-weight:800;text-align:center;letter-spacing:-.01em}
+.lock-sub{font-size:12px;color:var(--text-dim);text-align:center;margin-top:5px;line-height:1.7}
 .lock-err{font-size:12px;color:var(--danger);text-align:center;min-height:16px}
 .pin-dots{display:flex;gap:14px;direction:ltr}
-.pin-dot{width:13px;height:13px;border-radius:50%;border:2px solid var(--text-dim);transition:all .15s}
+.pin-dot{width:13px;height:13px;border-radius:50%;border:2px solid var(--text-faint);transition:all .15s}
 .pin-dot.filled{background:var(--accent);border-color:var(--accent)}
 .pin-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;width:100%;max-width:280px;direction:ltr}
-.pin-key{aspect-ratio:1.4/1;border-radius:18px;background:var(--bg-3);border:1px solid var(--border);color:var(--text);font-size:20px;font-weight:700;display:flex;align-items:center;justify-content:center;transition:background .12s}
+.pin-key{aspect-ratio:1.4/1;border-radius:18px;background:var(--bg-3);border:1px solid var(--border-soft);color:var(--text);font-size:20px;font-weight:700;display:flex;align-items:center;justify-content:center;transition:background .12s}
 .pin-key:active{background:var(--accent-glow)}
 .pin-key.dim{font-size:12.5px;font-weight:600;color:var(--text-dim)}
-.glogin{display:flex;align-items:center;justify-content:center;gap:10px;text-decoration:none;margin-top:6px;font-weight:700}
-.account-box{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
-.acct-name{font-weight:700;font-size:14px}
-.acct-mail{color:var(--text-dim);font-size:12px;direction:ltr;text-align:right}
+.glogin{display:flex;align-items:center;justify-content:center;gap:10px;text-decoration:none;margin-top:8px;font-weight:700}
+/* ===== v9.8.5 ورود با نام کاربری ===== */
+#loginFormWrap{display:none;flex-direction:column;gap:10px;margin-top:8px}
+.login-input{width:100%;background:var(--bg-2);border:1px solid var(--border);border-radius:14px;padding:13px 16px;font-size:14px;color:var(--text);outline:none;text-align:left;direction:ltr}
+.login-input:focus{border-color:var(--accent-dim)}
+#loginSubmit{margin-top:2px}
+.lock-alt{font-size:12px;color:var(--text-dim);text-align:center;margin-top:12px}
+.lock-alt a{color:var(--accent-dim);font-weight:700;cursor:pointer;text-decoration:underline}
+.account-box{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.account-box .acct-avatar{
+  width:46px;height:46px;border-radius:50%;object-fit:cover;flex-shrink:0;
+  border:1px solid var(--border-soft);background:var(--bg-3);
+}
+.account-box .acct-text{display:flex;flex-direction:column;gap:4px;min-width:0}
+.acct-name{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.acct-mail{color:var(--text-dim);font-size:12px;direction:ltr;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @keyframes pinShake{0%,100%{transform:translateX(0)}20%{transform:translateX(-9px)}40%{transform:translateX(9px)}60%{transform:translateX(-6px)}80%{transform:translateX(6px)}}
 .pin-dots.shake{animation:pinShake .4s}
 .pin-inputs{display:flex;flex-direction:column;gap:10px;margin-bottom:12px}
-.pin-field{width:100%;background:var(--bg-2);border:1px solid var(--border);border-radius:14px;color:var(--text);padding:12px 14px;font-size:14px;letter-spacing:6px;text-align:center;outline:none;direction:ltr}
+.pin-field{width:100%;background:var(--bg-2);border:1px solid var(--border);border-radius:14px;color:var(--text);padding:12px 14px;font-size:14px;letter-spacing:6px;text-align:center;outline:none;direction:ltr;transition:border-color .15s}
 .pin-field:focus{border-color:var(--accent-dim)}
 </style>
 </head>
@@ -380,17 +570,24 @@ button,input{font-family:inherit}
     <div class="lock-badge"><span class="icon" data-lucide="shield-check"></span></div>
     <div>
       <p class="lock-title" id="lockTitle">ورود به پنل</p>
-      <p class="lock-sub" id="lockSub">برای مدیریت بات واتساپ خودت با گوگل وارد شو</p>
+      <p class="lock-sub" id="lockSub"> برای استفاده از این ربات وارد شوید</p>
     </div>
     <p class="lock-err" id="lockErr"></p>
-    <a class="btn btn-secondary btn-block glogin" id="googleLoginBtn" href="/api/auth/google">
+    <a class="btn btn-secondary btn-block glogin" id="googleLoginBtn" href="https://sarafi-bot-2.onrender.com/api/auth/google">
       <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.647 6.825 29.582 4.5 24 4.5 12.955 4.5 4.5 12.955 4.5 24S12.955 43.5 24 43.5c10.545 0 19.5-7.615 19.5-19.5 0-1.09-.112-2.153-.317-3.183z"/><path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.647 6.825 29.582 4.5 24 4.5 16.302 4.5 9.698 8.724 6.306 14.691z"/><path fill="#4CAF50" d="M24 44.5c5.582 0 10.674-2.14 14.244-5.611l-6.585-5.559C29.655 35.744 26.989 36.9 24 36.9c-5.211 0-9.639-3.336-11.296-7.945l-6.522 5.025C9.533 41.186 16.194 44.5 24 44.5z"/><path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303c-.792 2.237-2.231 4.166-4.087 5.571l.003-.002 6.585 5.559C37.153 39.614 44.5 33.75 44.5 24c0-1.09-.112-2.153-.317-3.183-.018-.095-.04-.19-.059-.284-.033-.161-.077-.319-.124-.473z"/></svg>
       ورود با گوگل
     </a>
+    <div id="loginFormWrap">
+      <input class="login-input" id="loginUsername" placeholder="نام کاربری" autocomplete="username" autocapitalize="none">
+      <input class="login-input" id="loginPassword" type="password" placeholder="رمز عبور" autocomplete="current-password">
+      <button class="btn btn-secondary btn-block" id="loginSubmit">ورود</button>
+    </div>
+    <p class="lock-alt"><a id="loginToggle">ورود با نام کاربری</a></p>
   </div>
-</div><!-- ============ ONBOARDING (disconnected / connecting / qr) ============ -->
+</div><!-- ============ ONBOARDING / QR CONNECT OVERLAY ============ -->
 <div id="screenOnboarding">
-  <div class="onb-mark"><span class="icon" id="onbIcon"></span></div>
+  <button class="onb-close" id="onbCloseBtn" style="display:none" aria-label="بستن"><span class="icon" data-lucide="x"></span></button>
+  <div class="onb-mark"><span class="icon" id="onbIcon"><svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h.01"/><path d="M2 8.82a15 15 0 0 1 20 0"/><path d="M5 12.859a10 10 0 0 1 14 0"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/></svg></span></div>
   <div>
     <p class="onb-title" id="onbTitle">در حال اتصال</p>
     <p class="onb-sub" id="onbSub">چند لحظه صبر کن، داریم به سرور وصل می‌شویم</p>
@@ -411,7 +608,7 @@ button,input{font-family:inherit}
   <div class="onb-status" id="onbStatus"><span class="dot"></span><span id="onbStatusText">در حال اتصال به سرور</span></div>
 </div>
 
-<!-- ============ APP SHELL (connected) ============ -->
+<!-- ============ APP SHELL ============ -->
 <div id="screenApp">
 
   <header class="app-header">
@@ -427,10 +624,35 @@ button,input{font-family:inherit}
     <div class="status-pill ok" id="statusBadge"><span class="dot"></span><span>متصل</span></div>
   </header>
 
+  <div id="connectBanner" class="connect-banner" style="display:none">
+    <button class="connect-banner-close" id="connectBannerClose" aria-label="بستن"><span class="icon" data-lucide="x"></span></button>
+    <div class="connect-banner-icon"><span class="icon" data-lucide="smartphone"></span></div>
+    <div class="connect-banner-body">
+      <div class="connect-banner-title">واتساپ متصل نیست</div>
+      <div class="connect-banner-sub">برای استفاده از امکانات ربات، شماره واتساپ را وصل کن</div>
+      <div class="connect-banner-actions">
+        <button class="btn btn-primary btn-sm" id="connectBannerConnectBtn">متصل کردن</button>
+        <button class="btn btn-secondary btn-sm" id="connectBannerLaterBtn">بعداً</button>
+      </div>
+    </div>
+  </div>
+
+
   <div class="panels">
 
     <!-- ---------- DASHBOARD ---------- -->
     <section class="panel active" id="panel-dashboard">
+
+      <div class="plan-banner" id="planBanner" style="display:none"></div>
+
+      <div class="card">
+        <div class="card-head">
+          <div class="ico-badge" data-lucide="smartphone"></div>
+          <h2>حساب‌های واتساپ</h2>
+        </div>
+        <p class="sub" style="margin:2px 0 12px"></p>
+        <div class="num-row" id="numbersRow"></div>
+      </div>
 
       <div class="card">
         <div class="card-head">
@@ -439,14 +661,14 @@ button,input{font-family:inherit}
         </div>
         <div class="toggle-row">
           <div class="toggle-label">
-            <b style="font-size:14.5px">۱. تشخیص فیش تکراری</b>
+            <b style="font-size:14.5px"> تشخیص فیش تکراری</b>
             <span class="sub" id="dupStatus">فیش گروه‌ها بررسی و تکراری‌ها علامت می‌خورند</span>
           </div>
           <div class="toggle-switch" id="dupToggle"></div>
         </div>
         <div class="toggle-row">
           <div class="toggle-label">
-            <b style="font-size:14.5px">۲. ارسال فیش به تأیید کننده</b>
+            <b style="font-size:14.5px"> ارسال فیش به تأیید کننده</b>
             <span class="sub" id="confirmStatus">فیش‌ها برای تأیید نزد تأیید کننده می‌روند و ری‌اکشنش برمی‌گردد</span>
           </div>
           <div class="toggle-switch" id="confirmDashToggle"></div>
@@ -455,10 +677,66 @@ button,input{font-family:inherit}
 
     </section>
 
+    <!-- ---------- EXCHANGE (صرافی) ---------- -->
+    <section class="panel" id="panel-features">
+
+      <div class="card">
+        <div class="card-head">
+          <div class="ico-badge" data-lucide="sparkles"></div>
+          <h2>امکانات</h2>
+        </div>
+        <p class="sub" style="margin:2px 0 14px">قابلیت‌های جدید به‌تدریج به این بخش اضافه می‌شوند</p>
+
+        <div class="toggle-row">
+          <div class="toggle-label">
+            <b style="font-size:14.5px">پاسخ خودکار</b>
+            <span class="sub">پاسخ خودکار به پیام‌های گروه‌ها با هوش مصنوعی</span>
+          </div>
+          <span class="badge-count" style="align-self:center;white-space:nowrap">به‌زودی</span>
+        </div>
+
+        <div class="toggle-row">
+          <div class="toggle-label">
+            <b style="font-size:14.5px">مکمل چت هوش مصنوعی</b>
+            <span class="sub">اتصال چت‌بات هوشمند برای گفتگو با کاربران</span>
+          </div>
+          <span class="badge-count" style="align-self:center;white-space:nowrap">به‌زودی</span>
+        </div>
+      </div>
+
+    </section>
+
+    <section class="panel" id="panel-exchange">
+
+      <div class="card">
+        <div class="card-head">
+          <div class="ico-badge" data-lucide="arrow-left-right"></div>
+          <h2>قابلیت‌های صرافی</h2>
+        </div>
+        <div class="ex-row" data-open="dup">
+          <div class="toggle-label">
+            <b style="font-size:14.5px"> تشخیص فیش تکراری</b><span class="row-badge" id="navBadgeGroups">0</span>
+            <span class="sub" id="exDupStatus">فیش گروه‌ها بررسی و تکراری‌ها علامت می‌خورند</span>
+            <span class="ex-detail-btn">ورود به جزئیات<span class="icon" data-lucide="chevron-left"></span></span>
+          </div>
+          <div class="toggle-switch" id="exDupToggle"></div>
+        </div>
+        <div class="ex-row" data-open="confirm">
+          <div class="toggle-label">
+            <b style="font-size:14.5px"> ارسال فیش به تأیید کننده</b><span class="row-badge" id="navBadgeConfirm">0</span>
+            <span class="sub" id="exConfirmStatus">فیش‌ها برای تأیید نزد تأیید کننده می‌روند و ری‌اکشنش برمی‌گردد</span>
+            <span class="ex-detail-btn">ورود به جزئیات<span class="icon" data-lucide="chevron-left"></span></span>
+          </div>
+          <div class="toggle-switch" id="exConfirmToggle"></div>
+        </div>
+      </div>
+
+    </section>
+
     <!-- ---------- DUPLICATE (تشخیص فیش تکراری) ---------- -->
     <section class="panel" id="panel-dup">
 
-      <div class="section-title"><span>تشخیص فیش تکراری در گروه‌ها</span></div>
+      <div class="section-title"><button class="back-btn" data-back="exchange"><span class="icon" data-lucide="arrow-right"></span>صرافی</button><span>تشخیص فیش تکراری در گروه‌ها</span></div>
 
       <div class="card">
         <div class="card-head">
@@ -467,8 +745,8 @@ button,input{font-family:inherit}
         </div>
         <div class="confirm-flow">
           <div class="cf-step"><span class="icon" data-lucide="scan-line"></span>فیش‌های گروه‌ها با هوش مصنوعی بررسی می‌شود</div>
-          <div class="cf-step"><span class="icon" data-lucide="copy"></span>فیش تکراری → جواب خودکار «ارسال شده»</div>
-          <div class="cf-step"><span class="icon" data-lucide="image-off"></span>عکس غیر بانکی → نادیده گرفته می‌شود</div>
+          <div class="cf-step"><span class="icon" data-lucide="copy"></span>فیش تکراری ← جواب خودکار «ارسال شده»</div>
+          <div class="cf-step"><span class="icon" data-lucide="image-off"></span>عکس غیر بانکی ← نادیده گرفته می‌شود</div>
         </div>
       </div>
 
@@ -514,20 +792,16 @@ button,input{font-family:inherit}
     <!-- ---------- CONFIRM (ارسال فیش به تأیید کننده) ---------- -->
     <section class="panel" id="panel-confirm">
 
-      <div class="section-title"><span>ارسال فیش به تأیید کننده و ری‌اکشن</span></div>
+      <div class="section-title"><button class="back-btn" data-back="exchange"><span class="icon" data-lucide="arrow-right"></span>صرافی</button><span>ارسال فیش به تأیید کننده و ری‌اکشن</span></div>
 
       <div class="card">
         <div class="card-head">
           <div class="ico-badge" data-lucide="target"></div>
-          <h2>ارسال فیش به تأیید کننده</h2>
-        </div>
-        <div class="toggle-row">
-          <div class="toggle-label">ویژگی فعال باشد<span class="sub">فیش گروه‌ها به تأیید کننده فوروارد می‌شود و ری‌اکشن او در گروه نمایش داده می‌شود</span></div>
-          <div class="toggle-switch" id="confirmToggle"></div>
+          <h2>این بخش چه می‌کند؟</h2>
         </div>
         <div class="confirm-flow">
-          <div class="cf-step"><span class="icon" data-lucide="scan-line"></span>کاربر فیش می‌فرستد — ربات اسکن می‌کند</div>
-          <div class="cf-step"><span class="icon" data-lucide="send-horizontal"></span>فیش فوروارد می‌شود به تأیید کننده — در انتظار</div>
+          <div class="cf-step"><span class="icon" data-lucide="scan-line"></span>کاربر فیش می‌فرستد ← ربات اسکن می‌کند</div>
+          <div class="cf-step"><span class="icon" data-lucide="send-horizontal"></span>فیش فوروارد می‌شود به تأیید کننده ← در انتظار</div>
           <div class="cf-step"><span class="icon" data-lucide="circle-check"></span>ری‌اکشن تأیید کننده روی پیام گروه اعمال می‌شود</div>
         </div>
       </div>
@@ -543,6 +817,16 @@ button,input{font-family:inherit}
           <button class="btn btn-secondary btn-sm" id="ownerAddBtn">افزودن</button>
         </div>
         <div class="hint-line">شماره تأیید کننده را با کد کشور وارد کن، مثل 937XXXXXXXXX</div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div class="ico-badge" data-lucide="users-round"></div>
+          <h2>گروه‌های تأیید کننده</h2>
+          <button class="btn btn-secondary btn-sm" id="verifierClearBtn">لغو همه</button>
+        </div>
+        <div class="hint-line">به‌جای یک شماره، فیش‌ها به گروه(های) منتخب می‌روند — ری‌اکشن هر کس در آن گروه روی پیام اصلی اعمال می‌شود</div>
+        <div class="group-list" id="verifierGroupList"></div>
       </div>
 
       <div class="card">
@@ -571,27 +855,47 @@ button,input{font-family:inherit}
 
       <div class="card">
         <div class="card-head">
-          <div class="ico-badge" data-lucide="key-round"></div>
-          <h2>قدرت هوش مصنوعی (AI)</h2>
+          <div class="ico-badge" data-lucide="gem"></div>
+          <h2>اشتراک و پلن</h2>
         </div>
-        <div id="keysList"></div>
+        <p class="sub" style="margin:2px 0 12px">پلن فعلی شما و امکان ارتقا</p>
+        <div id="planAdmin"></div>
       </div>
 
-            <div class="card">
+      <div class="card">
+        <div class="card-head">
+          <div class="ico-badge" data-lucide="users"></div>
+          <h2>حساب‌های واتساپ</h2>
+        </div>
+        <p class="sub" style="margin:2px 0 12px"></p>
+        <div id="accountsAdmin"></div>
+        <button class="btn btn-secondary btn-block" id="createAccountBtn" style="margin-top:12px">+ ایجاد حساب جدید</button>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div class="ico-badge" data-lucide="settings"></div>
+          <h2>تنظیمات پنل</h2>
+        </div>
+
+        <div class="settings-subsection">
+          <div class="settings-subtitle"></div>
+          <div class="toggle-row">
+            <div class="toggle-label">حالت روشن
+              <span class="sub">جابجایی بین تم تیره و روشن</span>
+            </div>
+            <div class="toggle-switch" id="themeToggle"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
         <div class="card-head">
           <div class="ico-badge" data-lucide="user-round"></div>
           <h2>حساب کاربری</h2>
         </div>
         <div class="account-box" id="accountBox"></div>
-        <button class="btn btn-secondary btn-block" id="accountLogoutBtn">خروج از حساب گوگل</button>
-      </div>
-
-      <div class="card">
-        <div class="card-head">
-          <div class="ico-badge" data-lucide="log-out"></div>
-          <h2>اتصال واتساپ</h2>
-        </div>
-        <button class="btn btn-danger btn-block" id="logoutBtn">خروج از اکانت واتساپ</button>
+        <button class="btn btn-secondary btn-block" id="accountLogoutBtn">خروج از حساب</button>
       </div>
 
       <div class="footnote">پنل ربات واتساپ — سبک و سریع</div>
@@ -602,8 +906,8 @@ button,input{font-family:inherit}
   <nav class="bottom-nav">
     <div class="nav-indicator" id="navIndicator"></div>
     <button class="navbtn active" data-tab="dashboard"><span class="icon" data-lucide="house"></span><span>داشبورد</span></button>
-    <button class="navbtn" data-tab="dup"><span class="icon" data-lucide="copy"></span><span>فیش تکراری</span><span class="nav-badge" id="navBadgeGroups">0</span></button>
-    <button class="navbtn" data-tab="confirm"><span class="icon" data-lucide="target"></span><span>تأیید فیش</span><span class="nav-badge" id="navBadgeConfirm">0</span></button>
+    <button class="navbtn" data-tab="features"><span class="icon" data-lucide="sparkles"></span><span>امکانات</span></button>
+    <button class="navbtn" data-tab="exchange"><span class="icon" data-lucide="arrow-left-right"></span><span>صرافی</span></button>
     <button class="navbtn" data-tab="settings"><span class="icon" data-lucide="settings"></span><span>تنظیمات</span></button>
   </nav>
 
@@ -611,21 +915,62 @@ button,input{font-family:inherit}
 
 <div id="toast"></div>
 
-<script src="lucide.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lucide@latest/dist/umd/lucide.min.js"></script>
 <script>
-/* ==================================================
+/* ==== پنل مستقل — سرور هدف ====
+   این فایل را هر جا هاست کنی به سرور روبه‌رو وصل می‌شود.
+   برای تغییر سرور مقصد فقط همین یک خط را عوض کن. */
+const BASE_URL = "https://sarafi-bot-2.onrender.com";
+
+(function(){
+  const _f = window.fetch.bind(window);
+  window.fetch = function(url, opts){
+    if(typeof url === "string" && url.startsWith("/")) url = BASE_URL + url;
+    opts = opts || {};
+    if(!opts.credentials) opts.credentials = "include";
+    return _f(url, opts);
+  };
+  window.addEventListener("DOMContentLoaded", function(){
+    const g = document.getElementById("googleLoginBtn");
+    if(g) g.href = BASE_URL + "/api/auth/google?next=" + encodeURIComponent(location.origin + location.pathname);
+  });
+})();
+</script>
+<script>/* ==================================================
    ICONS
    ================================================== */
-function paintIcons(root=document){
-  if(window.lucide && lucide.createIcons){
+let _iconRaf = 0;
+function paintIcons(root){
+  if(!(window.lucide && lucide.createIcons)) return;
+  if(!root || root === document || !root.querySelectorAll){
     try{ lucide.createIcons({ icons: lucide.icons }); }catch(e){}
+    return;
+  }
+  /* سبک: فقط داخل همان بخش رنگ‌آمیزی می‌شود؛ یک جاروی کلی هم حداکثر یک‌بار در هر فریم */
+  try{ lucide.createIcons({ icons: lucide.icons, root: root }); }catch(e){}
+  if(!_iconRaf){
+    _iconRaf = requestAnimationFrame(() => {
+      _iconRaf = 0;
+      try{ lucide.createIcons({ icons: lucide.icons }); }catch(e){}
+    });
   }
 }
+/* آیکن‌های داخلی — حتی اگر CDN لود نشود یا هنوز لود نشده باشد نمایش داده می‌شوند */
+const BUILTIN_ICONS = {
+  Wifi: '<path d="M12 20h.01"/><path d="M2 8.82a15 15 0 0 1 20 0"/><path d="M5 12.859a10 10 0 0 1 14 0"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/>',
+  WifiOff: '<path d="M12 20h.01"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/><path d="M5 12.859a10 10 0 0 1 5.17-2.69"/><path d="M13.83 10.17A10 10 0 0 1 19 12.859"/><path d="M2 8.82a15 15 0 0 1 4.177-2.643"/><path d="M17.83 6.18A15 15 0 0 1 22 8.82"/><path d="m2 2 20 20"/>',
+  ScanLine: '<path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/>'
+};
+function builtinSvg(name){
+  const body = BUILTIN_ICONS[name];
+  if(!body) return "";
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + body + '</svg>';
+}
 function lucideSvg(name){
-  if(!window.lucide || !lucide.icons) return "";
-  const icon = lucide.icons[name];
-  if(!icon) return "";
-  return lucide.createElement(icon).outerHTML;
+  if(window.lucide && lucide.icons && lucide.icons[name]){
+    try{ return lucide.createElement(lucide.icons[name]).outerHTML; }catch(e){}
+  }
+  return builtinSvg(name);
 }
 let state = {
   connectionState: "disconnected",
@@ -639,8 +984,28 @@ let state = {
   queue: { pending: 0, busy: false }
 };
 let receiptsData = [];
+/* v10: شماره‌های واتساپ (اسلات‌ها) */
+let slotsData = { slots: [], nextSlot: 2, active: 1 };
 let lastConnectionState = null;
 const $ = id => document.getElementById(id);
+
+/* ==================================================
+   THEME (dark / light)
+   ================================================== */
+function applyTheme(theme){
+  document.documentElement.setAttribute("data-theme", theme === "light" ? "light" : "dark");
+  try{ localStorage.setItem("panelTheme", theme); }catch(e){}
+  const sw = $("themeToggle");
+  if(sw){ theme === "light" ? sw.classList.add("on") : sw.classList.remove("on"); }
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if(meta) meta.setAttribute("content", theme === "light" ? "#f6f9f7" : "#0a0d0c");
+}
+function initTheme(){
+  let saved = "light";
+  try{ saved = localStorage.getItem("panelTheme") || "light"; }catch(e){}
+  applyTheme(saved);
+}
+initTheme();
 
 /* ==================================================
    UTILS
@@ -666,7 +1031,8 @@ function formatNumber(n){
 /* ==================================================
    TABS
    ================================================== */
-const TABS = ["dashboard","dup","confirm","settings"];
+const TABS = ["dashboard","features","exchange","dup","confirm","settings"];
+const NAV_PARENT = { dup:"exchange", confirm:"exchange" };
 function goToTab(tab){
   const idx = TABS.indexOf(tab);
   if(idx === -1) return;
@@ -674,24 +1040,50 @@ function goToTab(tab){
   document.querySelectorAll(".navbtn").forEach(b => b.classList.remove("active"));
   $("panel-" + tab).classList.add("active");
   $("panel-" + tab).scrollTop = 0;
-  const btn = document.querySelector('.navbtn[data-tab="' + tab + '"]');
+  const btn = document.querySelector('.navbtn[data-tab="' + (NAV_PARENT[tab] || tab) + '"]');
   btn.classList.add("active");
   moveIndicator(btn);
 }
 function moveIndicator(btn){
-  const nav = btn.parentElement;
-  const navRect = nav.getBoundingClientRect();
-  const btnRect = btn.getBoundingClientRect();
-  const center = (btnRect.left - navRect.left) + btnRect.width / 2;
-  $("navIndicator").style.transform = "translateX(" + (center - 14) + "px)";
+  const ind = $("navIndicator");
+  if(!btn || !ind) return;
+  ind.style.width = btn.offsetWidth + "px";
+  ind.style.transform = "translateX(" + btn.offsetLeft + "px)";
 }
 document.querySelectorAll(".navbtn").forEach(b => {
   b.addEventListener("click", () => goToTab(b.dataset.tab));
+});
+/* منوی صرافی: ورود به جزئیات و بازگشت */
+document.querySelectorAll(".ex-row").forEach(r => {
+  r.addEventListener("click", () => goToTab(r.dataset.open));
+});
+document.querySelectorAll(".back-btn").forEach(b => {
+  b.addEventListener("click", () => goToTab(b.dataset.back));
+});
+/* کلید روشن/خاموش صرافی — بدون ورود به جزئیات */
+$("exDupToggle").addEventListener("click", e => { e.stopPropagation(); toggleBot(); });
+$("exConfirmToggle").addEventListener("click", e => { e.stopPropagation(); $("confirmDashToggle").click(); });
+/* همگام‌سازی وضعیت و متن با کارت داشبورد */
+[["dupToggle","exDupToggle"],["confirmDashToggle","exConfirmToggle"]].forEach(([src,dst]) => {
+  const sync = () => $(dst).classList.toggle("on", $(src).classList.contains("on"));
+  new MutationObserver(sync).observe($(src), { attributes:true, attributeFilter:["class"] });
+  sync();
+});
+[["dupStatus","exDupStatus"],["confirmStatus","exConfirmStatus"]].forEach(([src,dst]) => {
+  const sync = () => { $(dst).textContent = $(src).textContent; };
+  new MutationObserver(sync).observe($(src), { childList:true, characterData:true, subtree:true });
+  sync();
 });
 window.addEventListener("resize", () => {
   const active = document.querySelector(".navbtn.active");
   if(active) moveIndicator(active);
 });
+if(window.ResizeObserver){
+  new ResizeObserver(() => {
+    const active = document.querySelector(".navbtn.active");
+    if(active && active.offsetWidth) moveIndicator(active);
+  }).observe(document.querySelector(".bottom-nav"));
+}
 
 /* ==================================================
    AUTH — ورود با گوگل
@@ -719,6 +1111,8 @@ function showLock(){
       history.replaceState(null, "", "/");
     }
   }catch(e){}
+  $("screenOnboarding").style.display = "none";
+  $("screenApp").style.display = "none";
   $("lockScreen").classList.remove("hidden");
 }
 function forceLock(){
@@ -728,13 +1122,97 @@ function forceLock(){
   stopHttpFallback();
   showLock();
 }
+/* v10.2: پلن اشتراک */
+let planData = null;
+
+function fetchPlan(){
+  return fetch("/api/plan")
+    .then(r => r.json())
+    .then(d => { if(d.ok){ planData = d; renderPlan(); } })
+    .catch(() => {});
+}
+
+function renderPlan(){
+  if(!planData || !planData.plan) return;
+  const p = planData.plan;
+
+  /* بنر داشبورد */
+  const banner = document.getElementById("planBanner");
+  if(banner){
+    banner.style.display = "flex";
+    banner.classList.toggle("expired", !!p.expired);
+    banner.innerHTML = p.expired
+      ? '<span>⚠️ پلن ' + p.name + ' منقضی شده — ربات متوقف است</span><span class="plan-days">از تنظیمات ← اشتراک و پلن، ارتقا بده</span>'
+      : '<span>پلن فعلی: ' + p.name + (p.dailyReceipts ? ' · فیش امروز: ' + p.usedToday + '/' + p.dailyReceipts : '') + '</span><span class="plan-days">' + p.daysLeft + ' روز باقی‌مانده</span>';
+  }
+
+  /* کارت تنظیمات */
+  const box = document.getElementById("planAdmin");
+  if(!box) return;
+  let html = '';
+  (planData.plans || []).forEach(pl => {
+    const cur = pl.type === p.type;
+    html += '<div class="plan-row' + (cur ? ' current' : '') + '">'
+         +  '<div class="p-info">'
+         +    '<div class="p-name">' + pl.name + (cur ? ' <span style="font-size:10px;color:#4ade80">(فعلی)</span>' : '') + '</div>'
+         +    '<div class="p-price">' + pl.price + '</div>'
+         +    '<div class="p-features">' + pl.features.join(' · ') + '</div>'
+         +  '</div>'
+         +  (cur ? '<button class="plan-btn" disabled>پلن فعلی</button>'
+               : '<button class="plan-btn" data-plan="' + pl.type + '">فعال کردن</button>')
+         +  '</div>';
+  });
+  if(p.expired){
+    html = '<div class="plan-row current" style="border-color:rgba(229,115,104,.5);background:rgba(229,115,104,.08)">'
+         + '<div class="p-info"><div class="p-name" style="color:#e57368">⚠️ پلن ' + p.name + ' منقضی شده است</div>'
+         + '<div class="p-features">ربات پردازش نمی‌کند تا پلن را ارتقا یا تمدید کنی</div></div></div>' + html;
+  }
+  box.innerHTML = html;
+  box.querySelectorAll("[data-plan]").forEach(b => {
+    b.addEventListener("click", async () => {
+      const type = b.getAttribute("data-plan");
+      const name = (planData.plans.find(x => x.type === type) || {}).name || type;
+      const ok = await appConfirm("پلن «" + name + "» فعال شود؟", { okText: "بله، فعال کن", danger: false });
+      if(!ok) return;
+      b.disabled = true;
+      b.textContent = "...";
+      try{
+        const r = await fetch("/api/plan/set", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type })
+        });
+        const d = await r.json();
+        if(d.ok){
+          toast("پلن «" + name + "» فعال شد ✓");
+          await fetchPlan();
+          fetchSlots();
+        }else{
+          toast(d.error || "خطا در فعال‌سازی پلن");
+          await fetchPlan();
+        }
+      }catch(e){
+        toast("خطا در ارتباط با سرور");
+        b.disabled = false;
+        b.textContent = "فعال کردن";
+      }
+    });
+  });
+}
+
 function unlock(){
   unlocked = true;
   $("lockScreen").classList.add("hidden");
+  $("screenOnboarding").style.display = "none";
+  $("screenApp").style.display = "flex";
   connectWS();
   setTimeout(() => { if(!gotState) startHttpFallback(); }, 6000);
   /* اطمینان از شروع اتصال واتساپ — بی‌ضرر اگر از قبل وصل/در حال وصل باشد */
   fetch("/api/connect", { method: "POST" }).catch(() => {});
+  fetchSlots();
+  fetchPlan();
+  setInterval(fetchSlots, 30000);
+  setInterval(fetchPlan, 60000);
   fetch("/api/receipts")
     .then(r => r.json())
     .then(data => {
@@ -743,6 +1221,141 @@ function unlock(){
       renderReceipts();
     })
     .catch(() => {});
+}
+
+/* ==================================================
+   v10: شماره‌های واتساپ (اسلات‌ها)
+   ================================================== */
+function fmtNumLabel(s){
+  if(s.label) return s.label;
+  const ph = (s.slot === slotsData.active && state.botNumber) ? state.botNumber : s.phone;
+  if(ph) return "+" + String(ph).replace(/[^0-9]/g, "");
+  return "حساب " + toFa(s.slot);
+}
+function toFa(n){ return String(n).replace(/\d/g, d => "۰۱۲۳۴۵۶۷۸۹"[+d]); }
+
+function renderNumbers(){
+  const row = document.getElementById("numbersRow");
+  if(!row) return;
+  const slots = slotsData.slots || [];
+  let html = "";
+  for(const s of slots){
+    const dot = s.state === "connected" ? " on" : (s.state === "qr" || s.state === "connecting" ? " wait" : "");
+    const act = s.slot === slotsData.active ? " active" : "";
+    html += '<div class="num-chip' + act + '" data-slot="' + s.slot + '">' +
+            '<span class="num-dot' + dot + '"></span><span>' + escapeHtml(fmtNumLabel(s)) + "</span></div>";
+  }
+  row.innerHTML = html;
+  row.querySelectorAll(".num-chip[data-slot]").forEach(ch => {
+    ch.addEventListener("click", e => {
+      switchSlot(parseInt(ch.dataset.slot, 10));
+    });
+  });
+  renderAccounts();
+}
+
+function stateText(s){
+  if(s.state === "connected") return "متصل";
+  if(s.state === "qr") return "در انتظار اسکن QR";
+  if(s.state === "connecting") return "در حال اتصال";
+  return s.hasCreds ? "قطع شده" : "بدون سشن";
+}
+
+function renderAccounts(){
+  const box = document.getElementById("accountsAdmin");
+  if(!box) return;
+  const slots = slotsData.slots || [];
+  if(!slots.length){ box.innerHTML = '<p class="sub">حسابی نیست</p>'; return; }
+  let html = "";
+  for(const s of slots){
+    const dot = s.state === "connected" ? " on" : (s.state === "qr" || s.state === "connecting" ? " wait" : "");
+    html += '<div class="aa-row" data-slot="' + s.slot + '">' +
+      '<span class="num-dot' + dot + '"></span>' +
+      '<div class="aa-info"><div class="aa-name">' + escapeHtml(fmtNumLabel(s)) + (s.slot === slotsData.active ? ' <span class="sub">(فعال)</span>' : "") + '</div>' +
+      '<div class="aa-sub">' + toFa(s.slot) + " · " + stateText(s) + (s.phone ? " · +" + String(s.phone).replace(/[^0-9]/g, "") : "") + '</div></div>' +
+      '<button class="aa-btn" data-ren="' + s.slot + '">ویرایش</button>' +
+      '<button class="aa-btn danger" data-del="' + s.slot + '">حذف</button>' +
+      '</div>';
+  }
+  box.innerHTML = html;
+  box.querySelectorAll("[data-ren]").forEach(b => b.addEventListener("click", () => renameSlot(parseInt(b.dataset.ren, 10))));
+  box.querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", () => removeSlot(parseInt(b.dataset.del, 10))));
+}
+
+async function renameSlot(slot){
+  const s = (slotsData.slots || []).find(x => x.slot === slot) || {};
+  const cur = s.label || "";
+  const label = await appPrompt("نام دلخواه این حساب را وارد کن", cur, { title: "ویرایش نام حساب", placeholder: "مثلاً: صرافی مرکزی" });
+  if(label === null) return;
+  fetch("/api/slot/rename", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ slot, label }) })
+    .then(r => r.json())
+    .then(d => {
+      if(d.ok){ toast("نام حساب ذخیره شد"); fetchSlots(); }
+      else toast(d.error || "ناموفق");
+    })
+    .catch(() => toast("خطای شبکه"));
+}
+
+function fetchSlots(){
+  fetch("/api/slots")
+    .then(r => r.json())
+    .then(d => {
+      if(d && d.ok){
+        slotsData = { slots: d.slots || [], nextSlot: d.nextSlot || 2, active: d.active || 1 };
+        renderNumbers();
+      }
+    })
+    .catch(() => {});
+}
+
+function switchSlot(slot){
+  if(slot === slotsData.active) return;
+  fetch("/api/slot", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ slot }) })
+    .then(r => r.json())
+    .then(d => { if(d.ok) location.reload(); else toast(d.error || "ناموفق"); })
+    .catch(() => toast("خطای شبکه"));
+}
+
+async function addSlot(){
+  const name = await appPrompt("نام این حساب را وارد کن", "", { title: "ایجاد حساب جدید", placeholder: "" });
+  if(name === null) return;
+  const label = name.trim();
+  if(!label){ toast("نام حساب را وارد کن"); return; }
+  const expected = slotsData.nextSlot;
+  fetch("/api/slot/add", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ label }) })
+    .then(r => r.json())
+    .then(d => {
+      if(!d.ok){ toast(d.error || "ناموفق"); return; }
+      const slot = d.slot || d.newSlot || d.id || expected;
+      // اطمینان از ثبت نام حتی اگر سرور label را در ساخت نپذیرد
+      return fetch("/api/slot/rename", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ slot, label }) })
+        .catch(() => {})
+        .then(() => {
+          toast("حساب جدید ساخته شد — QR را اسکن کن");
+          setTimeout(() => location.reload(), 700);
+        });
+    })
+    .catch(() => toast("خطای شبکه"));
+}
+(function(){
+  const b = document.getElementById("createAccountBtn");
+  if(b) b.addEventListener("click", addSlot);
+})();
+
+async function removeSlot(slot){
+  const active = slot === slotsData.active;
+  const ok = await appConfirm("‌این حساب و همه داده ها حذف شود؟" + (active ? " (حساب فعال است — بعد از حذف به حساب بعدی می‌روی)" : ""), { title: "حذف حساب", okText: "حذف", danger: true });
+  if(!ok) return;
+  fetch("/api/slot/remove", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ slot }) })
+    .then(r => r.json())
+    .then(d => {
+      if(d.ok){
+        toast("حذف شد");
+        if(active) setTimeout(() => location.reload(), 700); else fetchSlots();
+      }
+      else toast(d.error || "ناموفق");
+    })
+    .catch(() => toast("خطای شبکه"));
 }
 
 /* ==================================================
@@ -777,6 +1390,7 @@ function startHttpFallback(){
         if(c.ok){ state.confirm = (await c.json()) || state.confirm; }
       }catch(e){}
       render();
+      renderNumbers();
       if(cycle++ % 3 === 0){
         const rr = await _rawFetch("/api/receipts");
         if(rr.ok){
@@ -793,7 +1407,8 @@ function startHttpFallback(){
 
 function connectWS(){
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
-  ws = new WebSocket(proto + "//" + location.host + "/");
+  const _whost = BASE_URL.replace(/^https?:\/\//, "");
+  ws = new WebSocket(proto + "//" + _whost + "/");
 
   ws.onopen = () => { wsFailCount = 0; stopHttpFallback(); if(wsRetry) clearTimeout(wsRetry); };
 
@@ -812,6 +1427,7 @@ function connectWS(){
         state.models = data.models || state.models;
         state.keys = data.keys || state.keys;
         render();
+        renderNumbers();
       }
       if(data.type === "receipts"){
         receiptsData = data.receipts || [];
@@ -838,25 +1454,72 @@ function connectWS(){
 /* ==================================================
    MAIN RENDER (onboarding vs app shell)
    ================================================== */
+let qrOverlayOpen = false;
+let bannerDismissed = false;
+
+function showQrOverlay(){
+  qrOverlayOpen = true;
+  $("onbCloseBtn").style.display = "flex";
+  $("screenOnboarding").style.display = "flex";
+  renderOnboarding(state.connectionState);
+}
+function hideQrOverlay(){
+  qrOverlayOpen = false;
+  $("screenOnboarding").style.display = "none";
+}
+function updateStatusPill(cs){
+  const badge = $("statusBadge");
+  if(!badge) return;
+  if(cs === "connected"){
+    badge.className = "status-pill ok";
+    badge.innerHTML = '<span class="dot"></span><span>متصل</span>';
+    $("headerPulse").classList.add("on");
+  } else if(cs === "connecting"){
+    badge.className = "status-pill busy";
+    badge.innerHTML = '<span class="dot"></span><span>در حال اتصال</span>';
+    $("headerPulse").classList.remove("on");
+  } else if(cs === "qr"){
+    badge.className = "status-pill busy";
+    badge.innerHTML = '<span class="dot"></span><span>در انتظار اسکن</span>';
+    $("headerPulse").classList.remove("on");
+  } else {
+    badge.className = "status-pill err";
+    badge.innerHTML = '<span class="dot"></span><span>متصل نیست</span>';
+    $("headerPulse").classList.remove("on");
+  }
+}
+function updateConnectBanner(){
+  const banner = $("connectBanner");
+  if(!banner) return;
+  const show = unlocked && state.connectionState !== "connected" && !bannerDismissed;
+  banner.style.display = show ? "flex" : "none";
+}
+/* هر جایی از برنامه که نیاز به اتصال واتساپ دارد، قبل از اجرا این را صدا می‌زند */
+function requireConnected(){
+  if(state.connectionState === "connected") return true;
+  bannerDismissed = false;
+  updateConnectBanner();
+  toast("اول باید واتساپ متصل شود");
+  return false;
+}
+
 function render(){
-  const onboarding = $("screenOnboarding");
-  const app = $("screenApp");
   const cs = state.connectionState;
 
+  if(unlocked) $("screenApp").style.display = "flex";
+
+  updateStatusPill(cs);
+  $("botNumberLabel").textContent = state.botNumber ? state.botNumber : "شماره ربات نامشخص";
+
   if(cs === "connected"){
-    onboarding.style.display = "none";
-    app.style.display = "flex";
-    $("headerPulse").classList.add("on");
-    $("statusBadge").className = "status-pill ok";
-    $("statusBadge").innerHTML = '<span class="dot"></span><span>متصل</span>';
-    $("botNumberLabel").textContent = state.botNumber ? state.botNumber : "شماره ربات نامشخص";
     if(lastConnectionState && lastConnectionState !== "connected") toast("به واتساپ متصل شد");
-    renderConnected();
-  } else {
-    app.style.display = "none";
-    onboarding.style.display = "flex";
-    renderOnboarding(cs);
+    bannerDismissed = false;
+    hideQrOverlay();
   }
+  updateConnectBanner();
+  if(qrOverlayOpen) renderOnboarding(cs);
+
+  renderConnected();
   lastConnectionState = cs;
 }
 
@@ -923,6 +1586,90 @@ function renderQR(qrText, qrImage){
 }
 
 /* ==================================================
+   LIGHT LISTS — رندر تکه‌تکه (لیست‌های بزرگ سبک می‌مانند)
+   ================================================== */
+const CHUNK = 30;
+function mountChunked(el, items, make, initial){
+  if(el._io){ el._io.disconnect(); el._io = null; }
+  el.textContent = "";
+  const more = document.createElement("button");
+  more.type = "button";
+  more.className = "btn btn-secondary btn-block load-more";
+  const st = { shown: 0 };
+  el._cs = st;
+  const add = n => {
+    const end = Math.min(st.shown + n, items.length);
+    const frag = document.createDocumentFragment();
+    for(let i = st.shown; i < end; i++) frag.appendChild(make(items[i], i));
+    st.shown = end;
+    el.insertBefore(frag, more.parentNode === el ? more : null);
+    if(st.shown >= items.length){
+      more.remove();
+      if(el._io){ el._io.disconnect(); el._io = null; }
+    }else{
+      more.textContent = "نمایش بیشتر (" + formatNumber(items.length - st.shown) + ")";
+      if(more.parentNode !== el) el.appendChild(more);
+    }
+    paintIcons(el);
+  };
+  more.addEventListener("click", () => add(CHUNK));
+  add(initial || CHUNK);
+  if(st.shown < items.length && "IntersectionObserver" in window){
+    el._io = new IntersectionObserver(es => {
+      if(es[0] && es[0].isIntersecting && st.shown < items.length) add(CHUNK);
+    }, { rootMargin: "300px" });
+    el._io.observe(more);
+  }
+}
+function unmountChunked(el){
+  if(el._io){ el._io.disconnect(); el._io = null; }
+  el._cs = null;
+}
+
+function groupItemEl(g, selected, onPick){
+  const el = document.createElement("div");
+  el.className = "group-item" + (selected ? " selected" : "");
+  el.dataset.jid = g.jid;
+  el.innerHTML = `
+    <div class="avatar">${escapeHtml((g.name || "?")[0])}<img src="${BASE_URL}/api/group-pic?jid=${encodeURIComponent(g.jid)}" alt="" loading="lazy" decoding="async" onerror="this.remove()"></div>
+    <div class="info">
+      <div class="name">${escapeHtml(g.name)}</div>
+      <div class="meta">${formatNumber(g.participants)} عضو</div>
+    </div>
+    <span class="icon check" data-lucide="check"></span>
+  `;
+  el.addEventListener("click", () => onPick(g));
+  return el;
+}
+
+/* لیست گروه‌ها: اگر فقط انتخاب‌ها عوض شده باشد، فقط کلاس‌ها به‌روز می‌شوند (بدون ساخت مجدد) */
+function syncGroupList(el, groups, selectedJids, onPick){
+  if(!el) return;
+  if(!groups.length){
+    if(el._sig !== "empty"){
+      unmountChunked(el);
+      el._sig = "empty";
+      el.innerHTML = '<div class="empty"><span class="icon" data-lucide="users"></span><p>گروهی پیدا نشد</p></div>';
+      paintIcons(el);
+    }
+    return;
+  }
+  const selSet = new Set(selectedJids);
+  const sig = groups.length + ":" + groups.map(g => g.jid + "|" + g.name + "|" + g.participants).join("\u0001");
+  if(el._sig === sig){
+    const kids = el.children;
+    for(let i = 0; i < kids.length; i++){
+      const jid = kids[i].dataset && kids[i].dataset.jid;
+      if(jid !== undefined) kids[i].classList.toggle("selected", selSet.has(jid));
+    }
+    return;
+  }
+  const keep = el._cs ? el._cs.shown : 0;
+  el._sig = sig;
+  mountChunked(el, groups, g => groupItemEl(g, selSet.has(g.jid), onPick), Math.max(CHUNK, keep));
+}
+
+/* ==================================================
    CONNECTED — DASHBOARD / GROUPS
    ================================================== */
 function renderConnected(){
@@ -951,30 +1698,7 @@ function renderConnected(){
     paintIcons(selBox);
   }
 
-  const list = $("groupList");
-  if(!state.groups.length){
-    list.innerHTML = '<div class="empty"><span class="icon" data-lucide="users"></span><p>گروهی پیدا نشد</p></div>';
-    paintIcons(list);
-  }else{
-    list.innerHTML = "";
-    state.groups.forEach(g => {
-      const el = document.createElement("div");
-      const selected = (state.config.targetGroups || []).some(t => t.jid === g.jid);
-      el.className = "group-item" + (selected ? " selected" : "");
-      const initials = (g.name || "?")[0];
-      el.innerHTML = `
-        <div class="avatar">${escapeHtml(initials)}</div>
-        <div class="info">
-          <div class="name">${escapeHtml(g.name)}</div>
-          <div class="meta">${formatNumber(g.participants)} عضو</div>
-        </div>
-        <span class="icon check" data-lucide="check"></span>
-      `;
-      el.addEventListener("click", () => selectGroup(g));
-      list.appendChild(el);
-    });
-    paintIcons(list);
-  }
+  syncGroupList($("groupList"), state.groups, sel.map(t => t.jid), selectGroup);
 
   const navBadgeGroups = $("navBadgeGroups");
   navBadgeGroups.textContent = sel.length;
@@ -994,14 +1718,16 @@ function renderConnected(){
    CONFIRM PANEL (واسطه تایید فیش)
    ================================================== */
 async function apiPost(url, body){
+  if(!requireConnected()) return { ok:false };
   const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
-  return r.json();
+  const d = await r.json().catch(() => ({}));
+  /* اگر بخش قفل است، خطای سرور (مثلاً «برای شما فعال نیست») به کاربر نشان داده می‌شود */
+  if(!d.ok && d.error) toast(d.error);
+  return d;
 }
 
 function renderConfirm(){
   const c = state.confirm || {};
-  const ct = $("confirmToggle");
-  if(c.enabled) ct.classList.add("on"); else ct.classList.remove("on");
   syncConfirmDashToggle();
 
   /* بج ناوبری + وضعیت داشبورد */
@@ -1028,40 +1754,21 @@ function renderConfirm(){
       <button class="btn btn-secondary btn-block" id="ownerClearBtn">لغو انتخاب تأیید کننده</button>
     `;
     $("ownerClearBtn").addEventListener("click", async () => {
-      await apiPost("/api/confirm/owner-clear");
-      toast("تأیید کننده حذف شد");
+      const r = await apiPost("/api/confirm/owner-clear");
+      if(r.ok) toast("تأیید کننده حذف شد");
     });
   }else{
     ob.innerHTML = '<div class="empty"><span class="icon" data-lucide="users"></span><p>تأیید کننده انتخاب نشده</p><p class="hint">شماره موبایلش را در فیلد پایین وارد کن و «افزودن» را بزن</p></div>';
     paintIcons(ob);
   }
 
+  /* v9.9.4: گروه‌های تأیید کننده */
+  syncGroupList($("verifierGroupList"), state.groups, (c.verifierGroups || []).map(t => t.jid),
+    g => apiPost("/api/confirm/verifier-group", { jid: g.jid, name: g.name }));
+
   /* گروه‌های تأیید */
-  const gl = $("confirmGroupList");
-  if(!state.groups.length){
-    gl.innerHTML = '<div class="empty"><span class="icon" data-lucide="users"></span><p>گروهی پیدا نشد</p></div>';
-    paintIcons(gl);
-  }else{
-    gl.innerHTML = "";
-    state.groups.forEach(g => {
-      const el = document.createElement("div");
-      const selected = (c.sourceGroups || []).some(t => t.jid === g.jid);
-      el.className = "group-item" + (selected ? " selected" : "");
-      el.innerHTML = `
-        <div class="avatar">${escapeHtml((g.name || "?")[0])}</div>
-        <div class="info">
-          <div class="name">${escapeHtml(g.name)}</div>
-          <div class="meta">${formatNumber(g.participants)} عضو</div>
-        </div>
-        <span class="icon check" data-lucide="check"></span>
-      `;
-      el.addEventListener("click", async () => {
-        await apiPost("/api/confirm/select-group", { jid: g.jid, name: g.name });
-      });
-      gl.appendChild(el);
-    });
-    paintIcons(gl);
-  }
+  syncGroupList($("confirmGroupList"), state.groups, (c.sourceGroups || []).map(t => t.jid),
+    g => apiPost("/api/confirm/select-group", { jid: g.jid, name: g.name }));
 
   /* فیش‌های در جریان */
   const qb = $("confirmQueue");
@@ -1090,26 +1797,27 @@ function renderConfirm(){
   }
 }
 
-$("confirmToggle").addEventListener("click", async () => {
-  const r = await apiPost("/api/confirm/toggle", { enabled: !state.confirm.enabled });
-  if(r.ok) toast(state.confirm.enabled ? "ارسال به تأیید کننده خاموش شد" : "ارسال به تأیید کننده روشن شد");
-});
 $("confirmDashToggle").addEventListener("click", async () => {
-  const r = await apiPost("/api/confirm/toggle", { enabled: !state.confirm.enabled });
-  if(r.ok) toast(state.confirm.enabled ? "ارسال به تأیید کننده خاموش شد" : "ارسال به تأیید کننده روشن شد");
+  const to = !state.confirm.enabled;
+  const r = await apiPost("/api/confirm/toggle", { enabled: to });
+  if(r.ok) toast(to ? "ارسال به تأیید کننده روشن شد" : "ارسال به تأیید کننده خاموش شد");
 });
 
+$("verifierClearBtn").addEventListener("click", async () => {
+  const r = await apiPost("/api/confirm/verifier-groups-clear");
+  if(r.ok) toast("گروه‌های تأیید کننده پاک شدند");
+});
 $("confirmClearGroups").addEventListener("click", async () => {
-  await apiPost("/api/confirm/clear-groups");
-  toast("گروه‌های تأیید پاک شدند");
+  const r = await apiPost("/api/confirm/clear-groups");
+  if(r.ok) toast("گروه‌های تأیید پاک شدند");
 });
 $("confirmSelectAllGroups").addEventListener("click", async () => {
   const r = await apiPost("/api/confirm/select-all-groups");
-  if(r.ok) toast("همه گروه‌ها برای تأیید انتخاب شدند"); else toast(r.error || "خطا");
+  if(r.ok) toast("همه گروه‌ها برای تأیید انتخاب شدند");
 });
 $("selectAllGroups").addEventListener("click", async () => {
   const r = await apiPost("/api/select-all-groups");
-  if(r.ok) toast("همه گروه‌ها انتخاب شدند"); else toast(r.error || "خطا");
+  if(r.ok) toast("همه گروه‌ها انتخاب شدند");
 });
 
 $("ownerAddBtn").addEventListener("click", async () => {
@@ -1120,15 +1828,18 @@ $("ownerAddBtn").addEventListener("click", async () => {
     await apiPost("/api/confirm/owner", { jid: r.jid, name: "" });
     $("ownerAddNumber").value = "";
     toast("تأیید کننده اضافه و انتخاب شد");
-  }else{
-    toast(r.error || "خطا");
   }
 });
 
 /* ==================================================
    STATS
    ================================================== */
+let _statsRef = null, _statsSel = -1, _statsDay = "";
 function renderStats(){
+  const selN = ((state.config && state.config.targetGroups) || []).length;
+  const dayKey = new Date().toDateString();
+  if(_statsRef === receiptsData && _statsSel === selN && _statsDay === dayKey) return;
+  _statsRef = receiptsData; _statsSel = selN; _statsDay = dayKey;
   const total = receiptsData.length;
   const today = new Date().toDateString();
   const todayCount = receiptsData.filter(r => new Date(r.timestamp).toDateString() === today).length;
@@ -1149,6 +1860,7 @@ function renderStats(){
    ================================================== */
 function renderKeys(){
   const box = $("keysList");
+  if(!box) return;
   const k = state.keys || {};
   if(k.totalPower === undefined){
     box.innerHTML = '<div class="empty"><span class="icon" data-lucide="key-round"></span><p>در حال دریافت قدرت AI...</p></div>';
@@ -1168,6 +1880,37 @@ function renderKeys(){
 /* ==================================================
    RECEIPTS
    ================================================== */
+function receiptEl(r){
+  const d = r.data || {};
+  const dateStr = new Date(r.timestamp).toLocaleString("fa-IR");
+  const source = r.source || "image";
+  const sourceLabel = source === "pdf" ? "PDF" : "عکس";
+  const sourceClass = source === "pdf" ? "source-pdf" : "source-image";
+  const el = document.createElement("div");
+  el.className = "receipt-item";
+  el.dataset.id = r.id;
+  el.innerHTML = `
+    <button class="del-btn" title="حذف" data-lucide="trash-2"></button>
+    <div class="row2">
+      <div><div class="label">مبلغ</div><div class="amount">${escapeHtml((d.amount || "?") + " " + (d.currency || ""))}</div></div>
+      <div><div class="label">تاریخ فیش</div><div class="value">${escapeHtml(d.date || "?")} ${escapeHtml(d.time || "")}</div></div>
+    </div>
+    <div class="row2">
+      <div><div class="label">فرستنده</div><div class="value">${escapeHtml(d.senderName || "?")}</div></div>
+      <div><div class="label">گیرنده</div><div class="value">${escapeHtml(d.receiverName || "?")}</div></div>
+    </div>
+    ${d.senderIban ? `<div><div class="label">IBAN فرستنده</div><div class="value" style="font-size:11px">${escapeHtml(d.senderIban)}</div></div>` : ""}
+    ${d.receiverIban ? `<div><div class="label">IBAN گیرنده</div><div class="value" style="font-size:11px">${escapeHtml(d.receiverIban)}</div></div>` : ""}
+    ${d.trackingNo ? `<div><div class="label">شماره پیگیری</div><div class="value" style="font-size:11px">${escapeHtml(d.trackingNo)}</div></div>` : ""}
+    ${d.referenceCode ? `<div><div class="label">کد مرجع</div><div class="value" style="font-size:11px">${escapeHtml(d.referenceCode)}</div></div>` : ""}
+    <div class="sender-info">
+      <span class="source-badge ${sourceClass}">${sourceLabel}</span>
+      فرستاده شده توسط <b>${escapeHtml(r.sender)}</b> — ${escapeHtml(dateStr)}
+    </div>
+  `;
+  return el;
+}
+
 function renderReceipts(){
   const list = $("receiptsList");
   const count = $("receiptsCount");
@@ -1176,63 +1919,40 @@ function renderReceipts(){
   count.textContent = formatNumber(receiptsData.length);
 
   if(!receiptsData.length){
-    list.innerHTML = `<div class="empty"><span class="icon" data-lucide="receipt"></span><p>هنوز فیشی ثبت نشده</p></div>`;
-    paintIcons(list);
+    if(list._sig !== "empty"){
+      unmountChunked(list);
+      list._sig = "empty";
+      list.innerHTML = `<div class="empty"><span class="icon" data-lucide="receipt"></span><p>هنوز فیشی ثبت نشده</p></div>`;
+      paintIcons(list);
+    }
     return;
   }
-
-  list.innerHTML = "";
-  receiptsData.forEach(r => {
-    const d = r.data || {};
-    const dateStr = new Date(r.timestamp).toLocaleString("fa-IR");
-    const source = r.source || "image";
-    const sourceLabel = source === "pdf" ? "PDF" : "عکس";
-    const sourceClass = source === "pdf" ? "source-pdf" : "source-image";
-
-    const el = document.createElement("div");
-    el.className = "receipt-item";
-    el.innerHTML = `
-      <button class="del-btn" title="حذف" data-lucide="trash-2"></button>
-      <div class="row2">
-        <div><div class="label">مبلغ</div><div class="amount">${escapeHtml((d.amount || "?") + " " + (d.currency || ""))}</div></div>
-        <div><div class="label">تاریخ فیش</div><div class="value">${escapeHtml(d.date || "?")} ${escapeHtml(d.time || "")}</div></div>
-      </div>
-      <div class="row2">
-        <div><div class="label">فرستنده</div><div class="value">${escapeHtml(d.senderName || "?")}</div></div>
-        <div><div class="label">گیرنده</div><div class="value">${escapeHtml(d.receiverName || "?")}</div></div>
-      </div>
-      ${d.senderIban ? `<div><div class="label">IBAN فرستنده</div><div class="value" style="font-size:11px">${escapeHtml(d.senderIban)}</div></div>` : ""}
-      ${d.receiverIban ? `<div><div class="label">IBAN گیرنده</div><div class="value" style="font-size:11px">${escapeHtml(d.receiverIban)}</div></div>` : ""}
-      ${d.trackingNo ? `<div><div class="label">شماره پیگیری</div><div class="value" style="font-size:11px">${escapeHtml(d.trackingNo)}</div></div>` : ""}
-      ${d.referenceCode ? `<div><div class="label">کد مرجع</div><div class="value" style="font-size:11px">${escapeHtml(d.referenceCode)}</div></div>` : ""}
-      <div class="sender-info">
-        <span class="source-badge ${sourceClass}">${sourceLabel}</span>
-        فرستاده شده توسط <b>${escapeHtml(r.sender)}</b> — ${escapeHtml(dateStr)}
-      </div>
-    `;
-    paintIcons(el);
-    el.querySelector(".del-btn").addEventListener("click", () => deleteReceipt(r.id));
-    list.appendChild(el);
-  });
+  const sig = receiptsData.length + ":" + receiptsData.map(r => r.id + "|" + r.timestamp).join(",");
+  if(list._sig === sig) return;
+  const keep = list._cs ? list._cs.shown : 0;
+  list._sig = sig;
+  mountChunked(list, receiptsData, receiptEl, Math.max(20, keep));
 }
+/* حذف با event delegation — با رندر تکه‌تکه هماهنگ است */
+$("receiptsList").addEventListener("click", e => {
+  const btn = e.target.closest(".del-btn");
+  if(!btn) return;
+  const item = btn.closest(".receipt-item");
+  if(item && item.dataset.id) deleteReceipt(item.dataset.id);
+});
 
 /* ==================================================
    ACTIONS
    ================================================== */
 async function selectGroup(g){
-  const r = await fetch("/api/select-group", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({ jid: g.jid, name: g.name })
-  });
-  const d = await r.json();
-  toast(d.selected ? "فعال شد: " + g.name : "حذف شد: " + g.name);
+  const r = await apiPost("/api/select-group", { jid: g.jid, name: g.name });
+  if(r.ok) toast(r.selected ? "فعال شد: " + g.name : "حذف شد: " + g.name);
 }
 
 async function clearGroup(){
   if(!confirm("همه گروه‌ها لغو شوند؟")) return;
-  await fetch("/api/clear-group", { method: "POST" });
-  toast("همه گروه‌ها لغو شدند");
+  const r = await apiPost("/api/clear-group");
+  if(r.ok) toast("همه گروه‌ها لغو شدند");
 }
 
 async function refreshGroups(){
@@ -1241,8 +1961,8 @@ async function refreshGroups(){
   btn.innerHTML = '<span class="loader"><span></span><span></span><span></span></span>';
   btn.disabled = true;
   try{
-    await fetch("/api/refresh-groups", { method: "POST" });
-    toast("لیست گروه‌ها بروزرسانی شد");
+    const r = await apiPost("/api/refresh-groups");
+    if(r.ok) toast("لیست گروه‌ها بروزرسانی شد");
   }catch(e){ toast("خطا در بروزرسانی"); }
   btn.innerHTML = original;
   btn.disabled = false;
@@ -1263,12 +1983,9 @@ async function refreshReceipts(){
 }
 
 async function toggleBot(){
-  await fetch("/api/toggle", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({ enabled: !state.config.enabled })
-  });
-  toast(state.config.enabled ? "تشخیص فیش تکراری خاموش شد" : "تشخیص فیش تکراری روشن شد");
+  const to = !state.config.enabled; /* مقصد قبل از درخواست ثابت می‌شود */
+  const r = await apiPost("/api/toggle", { enabled: to });
+  if(r.ok) toast(to ? "تشخیص فیش تکراری روشن شد" : "تشخیص فیش تکراری خاموش شد");
 }
 
 function syncConfirmDashToggle(){
@@ -1302,11 +2019,29 @@ async function logout(){
 paintIcons();
 moveIndicator(document.querySelector(".navbtn.active"));
 
+$("themeToggle").addEventListener("click", () => {
+  const current = document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+  applyTheme(current === "light" ? "dark" : "light");
+});
+$("connectBannerConnectBtn").addEventListener("click", () => {
+  showQrOverlay();
+});
+$("connectBannerLaterBtn").addEventListener("click", () => {
+  bannerDismissed = true;
+  updateConnectBanner();
+});
+$("connectBannerClose").addEventListener("click", () => {
+  bannerDismissed = true;
+  updateConnectBanner();
+});
+$("onbCloseBtn").addEventListener("click", hideQrOverlay);
+
 $("refreshGroups").addEventListener("click", refreshGroups);
 $("refreshReceipts").addEventListener("click", refreshReceipts);
 $("dupToggle").addEventListener("click", toggleBot);
 $("clearAllReceipts").addEventListener("click", clearAllReceipts);
-$("logoutBtn").addEventListener("click", logout);
+const logoutBtnEl = $("logoutBtn");
+if(logoutBtnEl) logoutBtnEl.addEventListener("click", logout);
 
 // جلوگیری کامل از زوم (پینچ / دابل‌تپ) برای حس اپلیکیشن‌واقعی
 document.addEventListener("gesturestart", e => e.preventDefault());
@@ -1345,9 +2080,15 @@ document.getElementById("accountLogoutBtn").addEventListener("click", async () =
     const r = await _rawFetch("/api/auth/me");
     if(!r.ok) return;
     const me = await r.json();
+    const initial = ((me.name || me.email || "?")[0] || "?").toUpperCase();
     $("accountBox").innerHTML =
+      (me.picture
+        ? '<img class="acct-avatar" src="' + escapeHtml(me.picture) + '" alt="" referrerpolicy="no-referrer">'
+        : '<div class="acct-avatar" style="display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--text-dim)">' + escapeHtml(initial) + '</div>') +
+      '<div class="acct-text">' +
       (me.name ? '<div class="acct-name">' + escapeHtml(me.name) + "</div>" : "") +
-      '<div class="acct-mail">' + escapeHtml(me.email || "") + "</div>";
+      '<div class="acct-mail">' + escapeHtml(me.email || "") + "</div>" +
+      '</div>';
     if(me.name || me.email) $("headerTitle").textContent = me.name || me.email;
     if(me.picture){
       const bm = document.querySelector(".brandmark");
@@ -1356,6 +2097,38 @@ document.getElementById("accountLogoutBtn").addEventListener("click", async () =
       av.src = me.picture;
     }
   }catch(e){}
+})();
+
+/* v9.8.5: سوییچ بین ورود گوگل و نام کاربری/رمز */
+(function initLoginModes(){
+  const toggle = document.getElementById("loginToggle");
+  if(!toggle) return;
+  toggle.addEventListener("click", (e) => {
+    e.preventDefault();
+    const wrap = document.getElementById("loginFormWrap");
+    const googleBtn = document.getElementById("googleLoginBtn");
+    const showingForm = wrap.style.display === "flex";
+    wrap.style.display = showingForm ? "none" : "flex";
+    googleBtn.style.display = showingForm ? "flex" : "none";
+    toggle.textContent = showingForm ? "ورود با نام کاربری" : "ورود با گوگل";
+    document.getElementById("loginUsername").focus();
+  });
+  const submit = document.getElementById("loginSubmit");
+  submit.addEventListener("click", async () => {
+    const username = document.getElementById("loginUsername").value.trim();
+    const password = document.getElementById("loginPassword").value;
+    const err = document.getElementById("lockErr");
+    submit.textContent = "...";
+    try{
+      const r = await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username, password }) });
+      const d = await r.json().catch(() => ({}));
+      if(d.ok){ location.reload(); return; }
+      err.textContent = d.error || "خطا در ورود";
+    }catch(e2){
+      err.textContent = "ارتباط با سرور برقرار نشد";
+    }
+    submit.textContent = "ورود";
+  });
 })();
 
 /* شروع: بررسی سشن گوگل — اگر لاگین است پنل باز می‌شود */
@@ -1368,5 +2141,76 @@ document.getElementById("accountLogoutBtn").addEventListener("click", async () =
 })();
 </script>
 
+<div class="app-modal-overlay" id="appModalOverlay">
+  <div class="app-modal-box">
+    <div class="app-modal-title" id="appModalTitle"></div>
+    <div class="app-modal-msg" id="appModalMsg"></div>
+    <input class="app-modal-input" id="appModalInput" type="text" style="display:none">
+    <div class="app-modal-actions">
+      <button class="am-cancel" id="appModalCancel">لغو</button>
+      <button class="am-ok" id="appModalOk">تأیید</button>
+    </div>
+  </div>
+</div>
+<script>
+/* v10.2: پاپ‌آپ سفارشی به‌جای confirm/prompt مرورگر */
+(function(){
+  const overlay = document.getElementById("appModalOverlay");
+  const titleEl = document.getElementById("appModalTitle");
+  const msgEl = document.getElementById("appModalMsg");
+  const inputEl = document.getElementById("appModalInput");
+  const okBtn = document.getElementById("appModalOk");
+  const cancelBtn = document.getElementById("appModalCancel");
+  let activeResolve = null;
+
+  function close(result){
+    overlay.classList.remove("show");
+    setTimeout(() => { overlay.style.display = "none"; }, 180);
+    if(activeResolve){ const r = activeResolve; activeResolve = null; r(result); }
+  }
+
+  function open(opts){
+    return new Promise(resolve => {
+      activeResolve = resolve;
+      titleEl.textContent = opts.title || "";
+      msgEl.textContent = opts.message || "";
+      msgEl.style.display = opts.message ? "" : "none";
+      okBtn.textContent = opts.okText || "تأیید";
+      okBtn.className = "am-ok" + (opts.danger ? " am-danger" : "");
+      if(opts.input){
+        inputEl.style.display = "";
+        inputEl.value = opts.defaultValue || "";
+        inputEl.placeholder = opts.placeholder || "";
+      } else {
+        inputEl.style.display = "none";
+        inputEl.value = "";
+      }
+      overlay.style.display = "flex";
+      requestAnimationFrame(() => overlay.classList.add("show"));
+      if(opts.input) setTimeout(() => inputEl.focus(), 60);
+    });
+  }
+
+  okBtn.addEventListener("click", () => {
+    close(inputEl.style.display !== "none" ? inputEl.value : true);
+  });
+  cancelBtn.addEventListener("click", () => close(inputEl.style.display !== "none" ? null : false));
+  overlay.addEventListener("click", e => { if(e.target === overlay) close(inputEl.style.display !== "none" ? null : false); });
+  inputEl.addEventListener("keydown", e => {
+    if(e.key === "Enter"){ e.preventDefault(); close(inputEl.value); }
+    if(e.key === "Escape"){ e.preventDefault(); close(null); }
+  });
+
+  /* جایگزین prompt: رشته یا null */
+  window.appPrompt = (message, defaultValue, opts) => open(Object.assign({
+    message, input: true, defaultValue: defaultValue || "",
+  }, opts || {}));
+
+  /* جایگزین confirm: true یا false */
+  window.appConfirm = (message, opts) => open(Object.assign({
+    message, input: false,
+  }, opts || {}));
+})();
+</script>
 </body>
 </html>
