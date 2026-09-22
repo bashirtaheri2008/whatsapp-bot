@@ -771,7 +771,7 @@ button,input{font-family:inherit}
           <button class="btn btn-secondary btn-sm" id="selectAllGroups">انتخاب همه</button>
         </div>
         <div id="selectedGroupBox"></div>
-        <div class="hint-line">روی هر گروه بزن تا روشن/خاموش شود — هیچ انتخابی = همه گروه‌ها</div>
+        <div class="hint-line">روی هر گروه بزن تا روشن/خاموش شود — تا گروهی انتخاب نکنی، ربات هیچ کاری نمی‌کند</div>
         <div class="group-list" id="groupList"></div>
       </div>
 
@@ -1692,7 +1692,7 @@ function renderConnected(){
       <div class="empty">
         <span class="icon" data-lucide="target"></span>
         <p>هنوز گروهی انتخاب نشده</p>
-        <p class="hint">از لیست «گروه‌های تحت نظر» انتخاب کن — چند گروه هم می‌شود</p>
+        <p class="hint">تا گروهی انتخاب نکنی، ربات هیچ فیشی پردازش نمی‌کند</p>
       </div>
     `;
     paintIcons(selBox);

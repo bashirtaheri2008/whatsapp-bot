@@ -1933,8 +1933,8 @@ class UserBot {
           if(!rJid.endsWith("@g.us")) continue;
           if(msg.key.fromMe) continue;
           if(!this.runtimeConfig.enabled) continue;
-          if(this.runtimeConfig.targetGroups.length > 0 &&
-             !this.runtimeConfig.targetGroups.some(t => t.jid === msg.key.remoteJid)) continue;
+          /* v10.2.1: هیچ گروهی انتخاب نشده = ربات در هیچ گروهی کار نمی‌کند (قبلاً: خالی = همه گروه‌ها) */
+          if(!this.runtimeConfig.targetGroups.some(t => t.jid === msg.key.remoteJid)) continue;
 
           const msgType = getMessageType(msg);
           const senderJid = msg.key.participant || msg.key.remoteJid;
