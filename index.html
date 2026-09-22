@@ -935,7 +935,8 @@ button,input{font-family:inherit}
         <div id="adminPayBox" style="display:none">
           <div class="settings-subsection">
             <div class="settings-subtitle">شماره حسابپی و یادداشت</div>
-            <input class="admin-inp" id="payNumInput" dir="ltr" placeholder="+93700000000">
+            <input class="admin-inp" id="payNumInput" dir="ltr" placeholder="شماره حساب‌پی (+93700000000)">
+            <input class="admin-inp" id="payAutoNumInput" dir="ltr" placeholder="شماره اتوما‌پی (+93700000000)">
             <input class="admin-inp" id="payNoteInput" placeholder="یادداشت برای کاربر (اختیاری)">
             <button class="btn btn-secondary btn-block" id="paySaveBtn" style="margin-top:10px">ذخیره تنظیمات پرداخت</button>
           </div>
@@ -1413,6 +1414,7 @@ async function adminLoadAll(){
   const pay = await adminFetch("/api/admin/pay-settings");
   if(pay && pay.ok){
     $("payNumInput").value = pay.pay.hesabpay;
+    if($("payAutoNumInput")) $("payAutoNumInput").value = pay.pay.autompay || "";
     $("payNoteInput").value = pay.pay.note || "";
   }else if(pay && pay.error){ adminLock(); toast("کلید مدیریت منقضی شد"); return; }
   const reqs = await adminFetch("/api/admin/plan-requests");
@@ -1439,7 +1441,7 @@ function adminRenderRequests(list){
     const stCls = r.status;
     const stTxt = r.status === "pending" ? "در انتظار" : (r.status === "approved" ? "تأیید شده" : "رد شده");
     html += '<div class="pr-item" data-rid="' + r.id + '">'
-         +  '<div class="pr-head"><span class="pr-badge ' + stCls + '">' + stTxt + '</span> پلن ' + r.planName + '</div>'
+         +  '<div class="pr-head"><span class="pr-badge ' + stCls + '">' + stTxt + '</span> پلن ' + r.planName + ' · ' + ((r.method === "autompay") ? "اتوما‌پی" : "حساب‌پی") + '</div>'
          +  '<div class="pr-user">' + (r.name || "بی‌نام") + (r.email ? " · " + r.email : "") + '</div>'
          +  (r.image ? '<img class="pr-img" src="' + r.image + '" alt="رسید">' : "")
          +  '<div class="pr-meta">ارسال: ' + faTime(r.at)
@@ -1494,7 +1496,7 @@ async function adminReqAction(id, act, itemEl){
 async function adminSavePaySettings(){
   const d = await adminFetch("/api/admin/pay-settings", {
     method: "POST",
-    body: JSON.stringify({ hesabpay: $("payNumInput").value.trim(), note: $("payNoteInput").value.trim() })
+    body: JSON.stringify({ hesabpay: $("payNumInput").value.trim(), autompay: ($("payAutoNumInput") ? $("payAutoNumInput").value.trim() : ""), note: $("payNoteInput").value.trim() })
   });
   if(d.ok) toast("تنظیمات پرداخت ذخیره شد ✓");
   else toast(d.error || "خطا");

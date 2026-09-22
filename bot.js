@@ -2319,7 +2319,7 @@ loadAdmin();
    v10.3: پرداخت واقعی — حسابپی + درخواست اشتراک
    ================================================== */
 const PAY_FILE = path.join(DATA_ROOT, "payments.json");
-let payState = { hesabpay: "+93745872028", note: "" };
+let payState = { hesabpay: "+93745872028", autompay: "", note: "" };
 function loadPay(){
   try{
     if(fs.existsSync(PAY_FILE)) payState = Object.assign(payState, JSON.parse(fs.readFileSync(PAY_FILE, "utf8")));
@@ -2453,6 +2453,7 @@ app.get("/api/admin/plan-requests", (req, res) => {
         id: r.id, gid: parseSlotKey(key).gid,
         email: u.meta.email || "", name: u.meta.name || "",
         type: r.type, planName: (PLANS[r.type] || {}).name || r.type,
+        method: r.method || "hesabpay",
         note: r.note || "", image: r.image || "",
         status: r.status, at: r.at, decidedAt: r.decidedAt || null, reason: r.reason || ""
       });
@@ -2513,17 +2514,20 @@ app.post("/api/admin/plan-request/delete", (req, res) => {
 
 /* تنظیمات پرداخت: شماره حسابپی + یادداشت */
 app.get("/api/admin/pay-settings", (req, res) => {
-  res.json({ ok: true, pay: { hesabpay: payState.hesabpay, note: payState.note || "" } });
+  res.json({ ok: true, pay: { hesabpay: payState.hesabpay, autompay: payState.autompay || "", note: payState.note || "" } });
 });
 app.post("/api/admin/pay-settings", (req, res) => {
   const hp = String((req.body || {}).hesabpay || "").replace(/[\s-]/g, "");
+  const ap = String((req.body || {}).autompay || "").replace(/[\s-]/g, "");
   const note = String((req.body || {}).note || "").trim().slice(0, 300);
   if(!/^\+?\d{9,15}$/.test(hp)) return res.json({ ok: false, error: "شماره حسابپی معتبر نیست (مثلاً +93745872028)" });
+  if(ap && !/^\+?\d{9,15}$/.test(ap)) return res.json({ ok: false, error: "شماره اتوماپی معتبر نیست" });
   payState.hesabpay = hp.startsWith("+") ? hp : "+" + hp;
+  payState.autompay = ap ? (ap.startsWith("+") ? ap : "+" + ap) : "";
   payState.note = note;
   savePay();
-  console.log("⚙️ تنظیمات پرداخت به‌روز شد — حسابپی: " + payState.hesabpay);
-  res.json({ ok: true, pay: { hesabpay: payState.hesabpay, note } });
+  console.log("⚙️ تنظیمات پرداخت به‌روز شد — حسابپی: " + payState.hesabpay + " — اتوماپی: " + (payState.autompay || "—"));
+  res.json({ ok: true, pay: { hesabpay: payState.hesabpay, autompay: payState.autompay, note } });
 });
 
 app.post("/api/admin/defaults", (req, res) => {
@@ -3073,7 +3077,7 @@ app.get("/api/plan", (req, res) => {
     ok: true,
     plan: planPublic(gid),
     plans,
-    pay: { hesabpay: payState.hesabpay, note: payState.note || "" },
+    pay: { hesabpay: payState.hesabpay, autompay: payState.autompay || "", note: payState.note || "" },
     request: pending ? { id: pending.id, type: pending.type, status: "pending", at: pending.at } : null,
     lastResult: lastResult ? { type: lastResult.type, status: lastResult.status, at: lastResult.decidedAt || lastResult.at, reason: lastResult.reason || "" } : null
   });
@@ -3098,6 +3102,7 @@ app.post("/api/plan/set", (req, res) => {
 app.post("/api/plan/request", (req, res) => {
   const gid = parseSlotKey(req.user.gid).gid;
   const type = String((req.body || {}).type || "");
+  const method = (req.body || {}).method === "autompay" ? "autompay" : "hesabpay";
   const note = String((req.body || {}).note || "").trim().slice(0, 300);
   const image = String((req.body || {}).image || "");
   if(!PLANS[type] || type === "free") return res.status(400).json({ ok: false, error: "پلن نامعتبر است" });
@@ -3113,7 +3118,7 @@ app.post("/api/plan/request", (req, res) => {
   }
   const entry = {
     id: gid.slice(0, 10) + "-" + Date.now().toString(36),
-    type, note, image, status: "pending", at: Date.now()
+    type, method, note, image, status: "pending", at: Date.now()
   };
   u.planReq.push(entry);
   u.savePlanReq();
