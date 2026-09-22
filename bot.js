@@ -2378,12 +2378,32 @@ app.get("/api/admin/users", (req, res) => {
       confirmEnabled: !!(u.confirmCfg && u.confirmCfg.enabled),
       allowDup: ov.allowDup, allowConfirm: ov.allowConfirm,
       username: (credentials.users && Object.entries(credentials.users).find(([, c]) => c.gid === gid) || [])[0] || null,
-      lastSeen: u.meta.lastSeen || null, createdAt: u.meta.createdAt || null
+      lastSeen: u.meta.lastSeen || null, createdAt: u.meta.createdAt || null,
+      /* v10.3.1: اطلاعات پلن برای پنل مدیریت جدا */
+      planType: planInfo(gid).type,
+      planName: PLANS[planInfo(gid).type].name,
+      planExpired: planInfo(gid).expired,
+      planExpiresAt: planInfo(gid).p.expires,
+      planDaysLeft: Math.max(0, Math.ceil((planInfo(gid).p.expires - Date.now()) / 86400000))
     });
   }
   list.sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0));
   res.json({ ok: true, users: list, total: list.length, connected, receiptsTotal, defaults: adminDefaults() });
 });
+/* v10.3.1: تغییر دستی پلن کاربر از پنل مدیریت جدا */
+app.post("/api/admin/user-plan", (req, res) => {
+  const gid = String(req.body.gid || "");
+  const type = String(req.body.type || "");
+  if(!gid || !PLANS[type]) return res.status(400).json({ ok: false, error: "درخواست نامعتبر" });
+  const u = users.get(gid);
+  if(!u) return res.status(404).json({ ok: false, error: "کاربر پیدا نشد" });
+  const now = Date.now();
+  u.meta.plan = { type, at: now, expires: now + PLANS[type].days * 86400000 };
+  u.saveMeta();
+  backupSoon(`plan-admin-${gid.split("/")[0]}`);
+  res.json({ ok: true, plan: planPublic(gid) });
+});
+
 /* v9.8.5: ساخت/ویرایش کاربر نام‌کاربری/رمز از پنل مدیریت */
 app.get("/api/admin/credentials", (req, res) => {
   const list = Object.entries(credentials.users).map(([uname, rec]) => ({
