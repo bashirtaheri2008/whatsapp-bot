@@ -1075,6 +1075,7 @@ async function backupUser(gid, reason){
     if(fs.existsSync(u.receiptsFile)) files.push([remote("receipts.json"), u.receiptsFile]);
     if(fs.existsSync(u.configFile)) files.push([remote("config.json"), u.configFile]);
     if(fs.existsSync(u.confirmFile)) files.push([remote("confirm.json"), u.confirmFile]);
+    if(fs.existsSync(u.planReqFile)) files.push([remote("plan-req.json"), u.planReqFile]);
     if(fs.existsSync(u.authDir)){
       fs.readdirSync(u.authDir).forEach(f => {
         const p = path.join(u.authDir, f);
@@ -1167,6 +1168,13 @@ async function restoreAllFromGithub(){
       }
     }catch(e){}
     loadCredentials();
+    /* v10.3: تنظیمات پرداخت */
+    try{
+      if(!fs.existsSync(PAY_FILE)){
+        if(!take("payments.json", PAY_FILE)) await ghGetFile("payments.json", PAY_FILE);
+      }
+    }catch(e){}
+    loadPay();
     /* فهرست کاربران */
     const idxLocal = path.join(USERS_DIR, "index.json");
     let index = null;
@@ -1197,6 +1205,7 @@ async function restoreAllFromGithub(){
           take("users/" + gid + "/receipts.json", u.receiptsFile);
           take("users/" + gid + "/config.json", u.configFile);
           take("users/" + gid + "/confirm.json", u.confirmFile);
+          take("users/" + gid + "/plan-req.json", u.planReqFile);
           /* نشست واتساپ — کل پوشه یکجا */
           const srcAuth = path.join(cloudDir, "users", gid, "auth_info");
           if(fs.existsSync(srcAuth)){
@@ -1228,6 +1237,7 @@ async function restoreAllFromGithub(){
           if(!fs.existsSync(u.receiptsFile)) await ghGetFile("users/" + gid + "/receipts.json", u.receiptsFile);
           if(!fs.existsSync(u.configFile)) await ghGetFile("users/" + gid + "/config.json", u.configFile);
           if(!fs.existsSync(u.confirmFile)) await ghGetFile("users/" + gid + "/confirm.json", u.confirmFile);
+          if(!fs.existsSync(u.planReqFile)) await ghGetFile("users/" + gid + "/plan-req.json", u.planReqFile);
           /* نشست */
           const r = await ghApi("GET", "/repos/" + GH_REPO + "/contents/users/" + gid + "/auth_info");
           if(r.ok){
@@ -1566,6 +1576,7 @@ class UserBot {
     this.configFile = path.join(this.dir, "config.json");
     this.receiptsFile = path.join(this.dir, "receipts.json");
     this.confirmFile = path.join(this.dir, "confirm.json");
+    this.planReqFile = path.join(this.dir, "plan-req.json");
 
     this.meta = {
       gid,
@@ -1624,6 +1635,18 @@ class UserBot {
     this.loadConfig();
     this.loadReceipts();
     this.loadConfirm();
+  }
+
+  /* v10.3: درخواست‌های پرداخت اشتراک */
+  loadPlanReq(){
+    this.planReq = [];
+    try{
+      if(fs.existsSync(this.planReqFile)) this.planReq = JSON.parse(fs.readFileSync(this.planReqFile, "utf8")) || [];
+    }catch(e){ this.planReq = []; }
+    return this.planReq;
+  }
+  savePlanReq(){
+    try{ fs.writeFileSync(this.planReqFile, JSON.stringify(this.planReq || [], null, 2)); }catch(e){}
   }
 
   loadConfig(){
@@ -2292,6 +2315,36 @@ function saveAdmin(){
 }
 loadAdmin();
 
+/* ==================================================
+   v10.3: پرداخت واقعی — حسابپی + درخواست اشتراک
+   ================================================== */
+const PAY_FILE = path.join(DATA_ROOT, "payments.json");
+let payState = { hesabpay: "+93745872028", note: "" };
+function loadPay(){
+  try{
+    if(fs.existsSync(PAY_FILE)) payState = Object.assign(payState, JSON.parse(fs.readFileSync(PAY_FILE, "utf8")));
+  }catch(e){}
+}
+function savePay(){
+  try{
+    fs.mkdirSync(DATA_ROOT, { recursive: true });
+    fs.writeFileSync(PAY_FILE, JSON.stringify(payState, null, 2));
+  }catch(e){ console.error("savePay:", e.message); }
+  if(cloudEnabled() && !cloudBlocked) ghPutFile("payments.json", PAY_FILE).catch(() => {});
+}
+loadPay();
+
+/* یافتن درخواست پرداخت در همه کاربران */
+function findPlanRequest(id){
+  for(const [key, u] of users.entries()){
+    if(!fs.existsSync(u.planReqFile)) continue;
+    u.loadPlanReq();
+    const r = (u.planReq || []).find(x => x.id === id);
+    if(r) return { u, req: r, gid: parseSlotKey(key).gid };
+  }
+  return null;
+}
+
 /* CORS + احراز کلید مدیریت */
 app.use("/api/admin", (req, res, next) => {
   res.set({
@@ -2367,6 +2420,90 @@ app.post("/api/admin/credential-delete", (req, res) => {
   delete credentials.users[uname];
   saveCredentials();
   res.json({ ok: true });
+});
+
+/* v10.3: فهرست درخواست‌های پرداخت برای ادمین */
+app.get("/api/admin/plan-requests", (req, res) => {
+  const out = [];
+  for(const [key, u] of users.entries()){
+    if(!fs.existsSync(u.planReqFile)) continue;
+    u.loadPlanReq();
+    (u.planReq || []).forEach(r => {
+      out.push({
+        id: r.id, gid: parseSlotKey(key).gid,
+        email: u.meta.email || "", name: u.meta.name || "",
+        type: r.type, planName: (PLANS[r.type] || {}).name || r.type,
+        note: r.note || "", image: r.image || "",
+        status: r.status, at: r.at, decidedAt: r.decidedAt || null, reason: r.reason || ""
+      });
+    });
+  }
+  out.sort((a, b) => {
+    if((a.status === "pending") !== (b.status === "pending")) return a.status === "pending" ? -1 : 1;
+    return b.at - a.at;
+  });
+  res.json({ ok: true, requests: out, count: out.filter(r => r.status === "pending").length });
+});
+
+/* تأیید درخواست → فعال‌سازی پلن از همین لحظه */
+app.post("/api/admin/plan-request/approve", (req, res) => {
+  const id = String((req.body || {}).id || "");
+  const found = findPlanRequest(id);
+  if(!found) return res.status(404).json({ ok: false, error: "درخواست پیدا نشد" });
+  if(found.req.status !== "pending") return res.status(400).json({ ok: false, error: "این درخواست قبلاً تعیین تکلیف شده است" });
+  const type = found.req.type;
+  const now = Date.now();
+  const info = planInfo(found.gid);
+  info.u.meta.plan = { type, at: now, expires: now + PLANS[type].days * 86400000 };
+  info.u.saveMeta();
+  found.req.status = "approved";
+  found.req.decidedAt = now;
+  found.u.savePlanReq();
+  backupUser(found.gid, "plan-approve");
+  console.log("✅ درخواست " + id + " تأیید شد — پلن " + PLANS[type].name + " فعال شد برای " + found.gid.slice(0, 12));
+  res.json({ ok: true, plan: planPublic(found.gid) });
+});
+
+/* رد درخواست با دلیل */
+app.post("/api/admin/plan-request/reject", (req, res) => {
+  const id = String((req.body || {}).id || "");
+  const reason = String((req.body || {}).reason || "").trim().slice(0, 200) || "درخواست رد شد";
+  const found = findPlanRequest(id);
+  if(!found) return res.status(404).json({ ok: false, error: "درخواست پیدا نشد" });
+  if(found.req.status !== "pending") return res.status(400).json({ ok: false, error: "این درخواست قبلاً تعیین تکلیف شده است" });
+  found.req.status = "rejected";
+  found.req.reason = reason;
+  found.req.decidedAt = Date.now();
+  found.u.savePlanReq();
+  backupUser(parseSlotKey(found.u.gid).gid, "plan-reject");
+  console.log("❌ درخواست " + id + " رد شد — " + reason);
+  res.json({ ok: true });
+});
+
+/* حذف درخواست (پاک‌سازی) */
+app.post("/api/admin/plan-request/delete", (req, res) => {
+  const id = String((req.body || {}).id || "");
+  const found = findPlanRequest(id);
+  if(!found) return res.status(404).json({ ok: false, error: "درخواست پیدا نشد" });
+  found.u.planReq = (found.u.planReq || []).filter(r => r.id !== id);
+  found.u.savePlanReq();
+  backupUser(parseSlotKey(found.u.gid).gid, "plan-req-delete");
+  res.json({ ok: true });
+});
+
+/* تنظیمات پرداخت: شماره حسابپی + یادداشت */
+app.get("/api/admin/pay-settings", (req, res) => {
+  res.json({ ok: true, pay: { hesabpay: payState.hesabpay, note: payState.note || "" } });
+});
+app.post("/api/admin/pay-settings", (req, res) => {
+  const hp = String((req.body || {}).hesabpay || "").replace(/[\s-]/g, "");
+  const note = String((req.body || {}).note || "").trim().slice(0, 300);
+  if(!/^\+?\d{9,15}$/.test(hp)) return res.json({ ok: false, error: "شماره حسابپی معتبر نیست (مثلاً +93745872028)" });
+  payState.hesabpay = hp.startsWith("+") ? hp : "+" + hp;
+  payState.note = note;
+  savePay();
+  console.log("⚙️ تنظیمات پرداخت به‌روز شد — حسابپی: " + payState.hesabpay);
+  res.json({ ok: true, pay: { hesabpay: payState.hesabpay, note } });
 });
 
 app.post("/api/admin/defaults", (req, res) => {
@@ -2903,20 +3040,66 @@ function listSlots(gid){
 /* v10.2: پلن اشتراک — مشاهده و فعال‌سازی (فعلاً کلیکی؛ پرداخت واقعی بعداً) */
 app.get("/api/plan", (req, res) => {
   const gid = parseSlotKey(req.user.gid).gid;
-  const plans = Object.keys(PLANS).map(k => ({ type: k, name: PLANS[k].name, price: PLANS[k].price, features: PLANS[k].features }));
-  res.json({ ok: true, plan: planPublic(gid), plans });
+  const plans = Object.keys(PLANS).map(k => ({ type: k, name: PLANS[k].name, price: PLANS[k].price, features: PLANS[k].features, paid: k !== "free" }));
+  const info = planInfo(gid);
+  info.u.loadPlanReq();
+  const list = info.u.planReq || [];
+  const pending = list.find(r => r.status === "pending") || null;
+  let lastResult = null;
+  for(let i = list.length - 1; i >= 0; i--){
+    if(list[i].status !== "pending"){ lastResult = list[i]; break; }
+  }
+  res.json({
+    ok: true,
+    plan: planPublic(gid),
+    plans,
+    pay: { hesabpay: payState.hesabpay, note: payState.note || "" },
+    request: pending ? { id: pending.id, type: pending.type, status: "pending", at: pending.at } : null,
+    lastResult: lastResult ? { type: lastResult.type, status: lastResult.status, at: lastResult.decidedAt || lastResult.at, reason: lastResult.reason || "" } : null
+  });
 });
 
 app.post("/api/plan/set", (req, res) => {
   const gid = parseSlotKey(req.user.gid).gid;
   const type = String((req.body || {}).type || "");
   if(!PLANS[type]) return res.status(400).json({ ok: false, error: "پلن نامعتبر است" });
+  if(type !== "free"){
+    return res.status(403).json({ ok: false, error: "پلن‌های پولی فقط بعد از پرداخت فعال می‌شوند — از دکمه «خرید» اقدام کن" });
+  }
   const info = planInfo(gid);
   const now = Date.now();
   info.u.meta.plan = { type, at: now, expires: now + PLANS[type].days * 86400000 };
   info.u.saveMeta();
   console.log("💳 پلن " + PLANS[type].name + " فعال شد — " + gid.slice(0, 12));
   res.json({ ok: true, plan: planPublic(gid) });
+});
+
+/* v10.3: ارسال درخواست خرید پلن پولی + عکس رسید حسابپی */
+app.post("/api/plan/request", (req, res) => {
+  const gid = parseSlotKey(req.user.gid).gid;
+  const type = String((req.body || {}).type || "");
+  const note = String((req.body || {}).note || "").trim().slice(0, 300);
+  const image = String((req.body || {}).image || "");
+  if(!PLANS[type] || type === "free") return res.status(400).json({ ok: false, error: "پلن نامعتبر است" });
+  if(!image.startsWith("data:image/")) return res.status(400).json({ ok: false, error: "عکس رسید واریزی الزامی است" });
+  const buf = Buffer.from(image.split(",")[1] || "", "base64");
+  if(buf.length < 500) return res.status(400).json({ ok: false, error: "فایل عکس معتبر نیست" });
+  if(buf.length > 3 * 1024 * 1024) return res.status(400).json({ ok: false, error: "حجم عکس زیاد است — حداکثر ۳ مگابایت" });
+  const info = planInfo(gid);
+  const u = info.u;
+  u.loadPlanReq();
+  if((u.planReq || []).some(r => r.status === "pending")){
+    return res.status(409).json({ ok: false, error: "یک درخواست در انتظار بررسی داری" });
+  }
+  const entry = {
+    id: gid.slice(0, 10) + "-" + Date.now().toString(36),
+    type, note, image, status: "pending", at: Date.now()
+  };
+  u.planReq.push(entry);
+  u.savePlanReq();
+  backupUser(gid, "plan-request");
+  console.log("💳 درخواست پلن " + PLANS[type].name + " از " + gid.slice(0, 12) + " — در انتظار تأیید");
+  res.json({ ok: true, request: { id: entry.id, type: entry.type, status: "pending", at: entry.at } });
 });
 
 app.get("/api/slots", (req, res) => {

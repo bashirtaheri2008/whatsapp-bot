@@ -346,6 +346,63 @@ button,input{font-family:inherit}
   font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap}
 .plan-btn:active{transform:scale(.96)}
 .plan-btn[disabled]{background:transparent;border:1px solid rgba(74,222,128,.4);color:#4ade80;cursor:default}
+.plan-status{border-radius:12px;padding:10px 12px;margin-bottom:10px;font-size:12px;line-height:1.7}
+.plan-status.pending{background:rgba(250,204,21,.1);border:1px solid rgba(250,204,21,.35)}
+.plan-status.rejected{background:rgba(229,115,104,.1);border:1px solid rgba(229,115,104,.4)}
+.plan-status.approved{background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.35)}
+/* v10.3: مودال پرداخت */
+.pay-overlay{position:fixed;inset:0;background:rgba(10,16,13,.6);backdrop-filter:blur(3px);
+  display:none;align-items:center;justify-content:center;z-index:9998;padding:20px}
+.pay-overlay.show{display:flex}
+.pay-box{background:var(--bg-2);border-radius:var(--r-lg);box-shadow:var(--shadow-pop);
+  width:100%;max-width:400px;max-height:90vh;overflow-y:auto}
+.pay-head{display:flex;align-items:center;justify-content:space-between;
+  padding:14px 16px;border-bottom:1px solid var(--border);font-size:14px;font-weight:700;color:var(--text)}
+.pay-close{background:none;border:none;color:var(--text-dim);font-size:16px;cursor:pointer;padding:4px 8px}
+.pay-body{padding:16px}
+.pay-lbl{font-size:11.5px;color:var(--text-dim);margin:10px 0 4px;font-weight:600}
+.pay-amount{font-size:16px;font-weight:800;color:#4ade80}
+.pay-num-row{display:flex;align-items:center;gap:8px;background:var(--bg-3);
+  border:1px solid var(--border);border-radius:10px;padding:10px 12px}
+.pay-num-row span{flex:1;font-weight:700;color:var(--text);font-size:14.5px;direction:ltr;text-align:left}
+.pay-copy{padding:5px 12px;border-radius:8px;border:none;background:#4ade80;color:#052e1c;
+  font-size:11px;font-weight:700;cursor:pointer;font-family:inherit}
+.pay-hint{font-size:11px;color:var(--text-dim);line-height:1.8;margin:10px 0}
+.pay-file{display:block;text-align:center;padding:14px;border:1.5px dashed var(--border);
+  border-radius:12px;font-size:12.5px;color:var(--text-dim);cursor:pointer;margin:8px 0}
+.pay-file.has{border-color:#4ade80;color:#4ade80}
+.pay-preview{width:100%;max-height:180px;object-fit:contain;border-radius:10px;margin-top:8px;
+  border:1px solid var(--border);display:none}
+.pay-note{width:100%;box-sizing:border-box;margin-top:10px;background:var(--bg-3);border:1px solid var(--border);
+  border-radius:10px;padding:10px;font-size:12px;color:var(--text);font-family:inherit;resize:vertical;min-height:56px}
+.pay-submit{width:100%;margin-top:12px;padding:12px;border:none;border-radius:12px;
+  background:#4ade80;color:#052e1c;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit}
+.pay-submit:active{transform:scale(.98)}
+.pay-submit[disabled]{opacity:.5;cursor:default}
+.pay-err{display:none;margin-top:8px;font-size:11.5px;color:#e57368;text-align:center}
+/* v10.3: کارت مدیریت پرداخت */
+.pr-badge{display:inline-block;padding:3px 9px;border-radius:20px;font-size:10.5px;font-weight:700}
+.pr-badge.pending{background:rgba(250,204,21,.15);color:#facc15}
+.pr-badge.approved{background:rgba(74,222,128,.15);color:#4ade80}
+.pr-badge.rejected{background:rgba(229,115,104,.15);color:#e57368}
+.pr-item{border:1px solid var(--border);border-radius:12px;padding:12px;margin-top:10px;background:var(--bg-3)}
+.pr-head{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700;color:var(--text);flex-wrap:wrap}
+.pr-user{font-size:11px;color:var(--text-dim);margin-top:3px}
+.pr-img{width:100%;max-height:170px;object-fit:contain;border-radius:10px;margin-top:8px;
+  border:1px solid var(--border);cursor:zoom-in;background:#000}
+.pr-img.big{position:fixed;inset:0;z-index:9999;max-height:100vh;object-fit:contain;background:rgba(0,0,0,.92);cursor:zoom-out}
+.pr-meta{font-size:11px;color:var(--text-dim);margin-top:6px;line-height:1.7}
+.pr-actions{display:flex;gap:8px;margin-top:10px}
+.pr-btn{flex:1;padding:8px;border:none;border-radius:10px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit}
+.pr-btn.ok{background:#4ade80;color:#052e1c}
+.pr-btn.no{background:rgba(229,115,104,.15);color:#e57368;border:1px solid rgba(229,115,104,.4)}
+.pr-btn.del{background:transparent;color:var(--text-dim);border:1px solid var(--border)}
+.pr-count{background:#e57368;color:#fff;border-radius:20px;padding:1px 8px;font-size:10.5px;font-weight:700}
+.admin-key-row{display:flex;gap:8px;margin-top:8px}
+.admin-key-row input{flex:1;background:var(--bg-3);border:1px solid var(--border);border-radius:10px;
+  padding:10px 12px;color:var(--text);font-size:12.5px;font-family:inherit}
+.admin-inp{width:100%;box-sizing:border-box;background:var(--bg-3);border:1px solid var(--border);
+  border-radius:10px;padding:10px 12px;color:var(--text);font-size:12.5px;font-family:inherit;margin-top:6px}
 .aa-row{display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid var(--border)}
 .aa-row:last-child{border-bottom:none}
 .aa-info{flex:1;min-width:0}
@@ -862,6 +919,35 @@ button,input{font-family:inherit}
         <div id="planAdmin"></div>
       </div>
 
+      <div class="card" id="adminPayCard">
+        <div class="card-head">
+          <div class="ico-badge" data-lucide="shield-check"></div>
+          <h2>مدیریت پرداخت</h2>
+          <span class="pr-count" id="adminReqBadge" style="display:none">0</span>
+        </div>
+        <div id="adminLockBox">
+          <p class="sub" style="margin:2px 0 8px">فقط برای مدیر سیستم</p>
+          <div class="admin-key-row">
+            <input type="password" id="adminKeyInput" placeholder="کلید مدیریت">
+            <button class="btn btn-secondary" id="adminUnlockBtn">ورود</button>
+          </div>
+        </div>
+        <div id="adminPayBox" style="display:none">
+          <div class="settings-subsection">
+            <div class="settings-subtitle">شماره حسابپی و یادداشت</div>
+            <input class="admin-inp" id="payNumInput" dir="ltr" placeholder="+93700000000">
+            <input class="admin-inp" id="payNoteInput" placeholder="یادداشت برای کاربر (اختیاری)">
+            <button class="btn btn-secondary btn-block" id="paySaveBtn" style="margin-top:10px">ذخیره تنظیمات پرداخت</button>
+          </div>
+          <div class="settings-subsection" style="margin-top:16px">
+            <div class="settings-subtitle">درخواست‌های اشتراک
+              <button class="btn btn-secondary btn-sm" id="adminRefreshBtn" style="float:left">بروزرسانی</button>
+            </div>
+            <div id="adminReqList"><p class="sub" style="margin:8px 0">درخواستی نیست</p></div>
+          </div>
+        </div>
+      </div>
+
       <div class="card">
         <div class="card-head">
           <div class="ico-badge" data-lucide="users"></div>
@@ -1149,17 +1235,36 @@ function renderPlan(){
   /* کارت تنظیمات */
   const box = document.getElementById("planAdmin");
   if(!box) return;
-  let html = '';
+  let html = "";
+
+  /* وضعیت درخواست پرداخت */
+  const req = planData.request, last = planData.lastResult;
+  if(req){
+    const pn = ((planData.plans || []).find(x => x.type === req.type) || {}).name || req.type;
+    html += '<div class="plan-status pending">⏳ درخواست خرید پلن «' + pn + '» ارسال شد و در انتظار تأیید مدیر است.</div>';
+  }
+  if(last && last.status === "rejected" && !req){
+    const pn = ((planData.plans || []).find(x => x.type === last.type) || {}).name || last.type;
+    html += '<div class="plan-status rejected">❌ درخواست پلن «' + pn + '» رد شد. دلیل: ' + (last.reason || "—") + '<br>می‌توانی دوباره اقدام کنی.</div>';
+  }
+  if(last && last.status === "approved" && !req && p.type !== "free"){
+    html += '<div class="plan-status approved">✅ پرداخت پلن «' + p.name + '» تأیید شد — اعتبار از لحظه تأیید شروع می‌شود.</div>';
+  }
+
   (planData.plans || []).forEach(pl => {
     const cur = pl.type === p.type;
+    const paid = pl.type !== "free";
+    let btn;
+    if(cur) btn = '<button class="plan-btn" disabled>پلن فعلی</button>';
+    else if(!paid) btn = '<button class="plan-btn" data-plan="free">فعال کردن</button>';
+    else btn = '<button class="plan-btn" data-buy="' + pl.type + '">خرید</button>';
     html += '<div class="plan-row' + (cur ? ' current' : '') + '">'
          +  '<div class="p-info">'
          +    '<div class="p-name">' + pl.name + (cur ? ' <span style="font-size:10px;color:#4ade80">(فعلی)</span>' : '') + '</div>'
          +    '<div class="p-price">' + pl.price + '</div>'
          +    '<div class="p-features">' + pl.features.join(' · ') + '</div>'
          +  '</div>'
-         +  (cur ? '<button class="plan-btn" disabled>پلن فعلی</button>'
-               : '<button class="plan-btn" data-plan="' + pl.type + '">فعال کردن</button>')
+         +  btn
          +  '</div>';
   });
   if(p.expired){
@@ -1168,6 +1273,8 @@ function renderPlan(){
          + '<div class="p-features">ربات پردازش نمی‌کند تا پلن را ارتقا یا تمدید کنی</div></div></div>' + html;
   }
   box.innerHTML = html;
+
+  /* فعال‌سازی رایگان */
   box.querySelectorAll("[data-plan]").forEach(b => {
     b.addEventListener("click", async () => {
       const type = b.getAttribute("data-plan");
@@ -1198,7 +1305,234 @@ function renderPlan(){
       }
     });
   });
+
+  /* خرید پلن پولی */
+  box.querySelectorAll("[data-buy]").forEach(b => {
+    b.addEventListener("click", () => openPayModal(b.getAttribute("data-buy")));
+  });
 }
+
+/* ==================================================
+   v10.3: مودال خرید پلن
+   ================================================== */
+let payModalType = null;
+let payImgData = null;
+
+function openPayModal(type){
+  const pl = (planData.plans || []).find(x => x.type === type);
+  if(!pl) return;
+  payModalType = type;
+  payImgData = null;
+  $("payTitle").textContent = "خرید پلن " + pl.name;
+  $("payAmount").textContent = pl.price;
+  const hp = (planData.pay && planData.pay.hesabpay) || "";
+  $("payNumber").textContent = hp;
+  $("payHint").textContent = "مبلغ را دقیقاً به این شماره حسابپی بفرست، بعد عکس رسید واریزی را آپلود کن. پس از تأیید مدیر، پلن همان لحظه فعال می‌شود." + ((planData.pay && planData.pay.note) ? "\n" + planData.pay.note : "");
+  $("payFileText").textContent = "📷 انتخاب عکس رسید واریزی";
+  $("payFileLabel").classList.remove("has");
+  $("payPreview").style.display = "none";
+  $("payPreview").src = "";
+  $("payNote").value = "";
+  $("payErr").style.display = "none";
+  $("paySubmitBtn").disabled = false;
+  $("paySubmitBtn").textContent = "ارسال درخواست";
+  $("payOverlay").classList.add("show");
+}
+
+function closePayModal(){ $("payOverlay").classList.remove("show"); }
+
+async function submitPayRequest(){
+  if(!payModalType) return;
+  if(!payImgData){ $("payErr").textContent = "عکس رسید الزامی است"; $("payErr").style.display = "block"; return; }
+  const btn = $("paySubmitBtn");
+  btn.disabled = true;
+  btn.textContent = "در حال ارسال...";
+  $("payErr").style.display = "none";
+  try{
+    const r = await fetch("/api/plan/request", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: payModalType, image: payImgData, note: $("payNote").value.trim() })
+    });
+    const d = await r.json();
+    if(d.ok){
+      closePayModal();
+      toast("درخواست ارسال شد — در انتظار تأیید مدیر ⏳");
+      await fetchPlan();
+    }else{
+      $("payErr").textContent = d.error || "خطا در ارسال درخواست";
+      $("payErr").style.display = "block";
+      btn.disabled = false;
+      btn.textContent = "ارسال درخواست";
+    }
+  }catch(e){
+    $("payErr").textContent = "خطا در ارتباط با سرور";
+    $("payErr").style.display = "block";
+    btn.disabled = false;
+    btn.textContent = "ارسال درخواست";
+  }
+}
+
+/* ==================================================
+   v10.3: مدیریت پرداخت (فقط ادمین)
+   ================================================== */
+let ADMIN_KEY = sessionStorage.getItem("hp_admin_key") || "";
+let adminTimer = null;
+
+async function adminFetch(url, opts = {}){
+  const r = await fetch(url, Object.assign({}, opts, {
+    headers: Object.assign({ "Content-Type": "application/json", "x-admin-key": ADMIN_KEY }, (opts.headers || {}))
+  }));
+  return r.json().catch(() => ({ ok: false, error: "خطا در ارتباط با سرور" }));
+}
+
+async function adminUnlock(){
+  const k = $("adminKeyInput").value.trim();
+  if(!k) return;
+  const d = await fetch("/api/admin/check", { headers: { "x-admin-key": k } }).then(r => r.json()).catch(() => ({ ok: false }));
+  if(!d.ok){ toast("کلید مدیریت نادرست است"); return; }
+  ADMIN_KEY = k;
+  sessionStorage.setItem("hp_admin_key", k);
+  $("adminLockBox").style.display = "none";
+  $("adminPayBox").style.display = "block";
+  adminLoadAll();
+  if(adminTimer) clearInterval(adminTimer);
+  adminTimer = setInterval(adminLoadAll, 30000);
+}
+
+function adminLock(){
+  ADMIN_KEY = "";
+  sessionStorage.removeItem("hp_admin_key");
+  $("adminLockBox").style.display = "block";
+  $("adminPayBox").style.display = "none";
+  if(adminTimer){ clearInterval(adminTimer); adminTimer = null; }
+}
+
+async function adminLoadAll(){
+  if(!ADMIN_KEY) return;
+  const pay = await adminFetch("/api/admin/pay-settings");
+  if(pay && pay.ok){
+    $("payNumInput").value = pay.pay.hesabpay;
+    $("payNoteInput").value = pay.pay.note || "";
+  }else if(pay && pay.error){ adminLock(); toast("کلید مدیریت منقضی شد"); return; }
+  const reqs = await adminFetch("/api/admin/plan-requests");
+  if(reqs && reqs.ok){
+    adminRenderRequests(reqs.requests || []);
+  }
+}
+
+function faTime(ts){
+  if(!ts) return "";
+  const d = new Date(ts);
+  return d.toLocaleDateString("fa-IR") + " " + d.toLocaleTimeString("fa-IR", { hour: "2-digit", minute: "2-digit" });
+}
+
+function adminRenderRequests(list){
+  const badge = $("adminReqBadge");
+  const pend = list.filter(r => r.status === "pending").length;
+  if(badge){ badge.style.display = pend ? "inline-block" : "none"; badge.textContent = pend; }
+
+  const box = $("adminReqList");
+  if(!list.length){ box.innerHTML = '<p class="sub" style="margin:8px 0">درخواستی نیست</p>'; return; }
+  let html = "";
+  list.forEach(r => {
+    const stCls = r.status;
+    const stTxt = r.status === "pending" ? "در انتظار" : (r.status === "approved" ? "تأیید شده" : "رد شده");
+    html += '<div class="pr-item" data-rid="' + r.id + '">'
+         +  '<div class="pr-head"><span class="pr-badge ' + stCls + '">' + stTxt + '</span> پلن ' + r.planName + '</div>'
+         +  '<div class="pr-user">' + (r.name || "بی‌نام") + (r.email ? " · " + r.email : "") + '</div>'
+         +  (r.image ? '<img class="pr-img" src="' + r.image + '" alt="رسید">' : "")
+         +  '<div class="pr-meta">ارسال: ' + faTime(r.at)
+         +  (r.note ? '<br>یادداشت: ' + r.note : "")
+         +  (r.status === "rejected" && r.reason ? '<br>دلیل رد: ' + r.reason : "")
+         +  (r.status !== "pending" ? '<br>تعیین: ' + faTime(r.decidedAt) : "")
+         +  '</div>';
+    if(r.status === "pending"){
+      html += '<div class="pr-actions">'
+           + '<button class="pr-btn ok" data-act="approve">✓ تأیید</button>'
+           + '<button class="pr-btn no" data-act="reject">✕ رد</button>'
+           + '</div>';
+    }
+    html += '<div class="pr-actions" style="margin-top:8px">'
+         + '<button class="pr-btn del" data-act="delete">حذف از فهرست</button>'
+         + '</div>'
+         + '</div>';
+  });
+  box.innerHTML = html;
+
+  box.querySelectorAll(".pr-img").forEach(img => {
+    img.addEventListener("click", () => img.classList.toggle("big"));
+  });
+  box.querySelectorAll("[data-act]").forEach(b => {
+    b.addEventListener("click", () => adminReqAction(b.closest(".pr-item").getAttribute("data-rid"), b.getAttribute("data-act"), b.closest(".pr-item")));
+  });
+}
+
+async function adminReqAction(id, act, itemEl){
+  if(act === "approve"){
+    const name = (itemEl.querySelector(".pr-head") || {}).textContent || "پلن";
+    const ok = await appConfirm("پلن این کاربر فعال شود؟ اعتبار از همین لحظه شروع می‌شود.", { okText: "بله، تأیید پرداخت", danger: false });
+    if(!ok) return;
+    const d = await adminFetch("/api/admin/plan-request/approve", { method: "POST", body: JSON.stringify({ id }) });
+    if(d.ok){ toast("پلن فعال شد ✓"); adminLoadAll(); }
+    else toast(d.error || "خطا");
+  }else if(act === "reject"){
+    const reason = await appPrompt("دلیل رد درخواست (برای کاربر نمایش داده می‌شود):", "", { okText: "رد کن", danger: true, placeholder: "مثلاً: عکس رسید واضح نیست" });
+    if(reason === null) return;
+    const d = await adminFetch("/api/admin/plan-request/reject", { method: "POST", body: JSON.stringify({ id, reason: reason || "" }) });
+    if(d.ok){ toast("درخواست رد شد"); adminLoadAll(); }
+    else toast(d.error || "خطا");
+  }else if(act === "delete"){
+    const ok = await appConfirm("این درخواست از فهرست حذف شود؟", { okText: "حذف کن", danger: true });
+    if(!ok) return;
+    const d = await adminFetch("/api/admin/plan-request/delete", { method: "POST", body: JSON.stringify({ id }) });
+    if(d.ok) adminLoadAll();
+    else toast(d.error || "خطا");
+  }
+}
+
+async function adminSavePaySettings(){
+  const d = await adminFetch("/api/admin/pay-settings", {
+    method: "POST",
+    body: JSON.stringify({ hesabpay: $("payNumInput").value.trim(), note: $("payNoteInput").value.trim() })
+  });
+  if(d.ok) toast("تنظیمات پرداخت ذخیره شد ✓");
+  else toast(d.error || "خطا");
+}
+
+/* v10.3: اتصال مودال خرید و مدیریت پرداخت */
+document.addEventListener("DOMContentLoaded", () => {
+  const q = id => document.getElementById(id);
+  if(q("payCloseBtn")) q("payCloseBtn").addEventListener("click", closePayModal);
+  if(q("payOverlay")) q("payOverlay").addEventListener("click", e => { if(e.target === q("payOverlay")) closePayModal(); });
+  if(q("payCopyBtn")) q("payCopyBtn").addEventListener("click", () => {
+    const t = q("payNumber").textContent;
+    (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast("کپی شد ✓")).catch(() => toast("کپی نشد"));
+  });
+  if(q("payFile")) q("payFile").addEventListener("change", e => {
+    const f = e.target.files[0];
+    if(!f) return;
+    if(f.size > 3 * 1024 * 1024){ toast("حجم عکس زیاد است — حداکثر ۳ مگابایت"); e.target.value = ""; return; }
+    const rd = new FileReader();
+    rd.onload = () => {
+      payImgData = rd.result;
+      q("payPreview").src = payImgData;
+      q("payPreview").style.display = "block";
+      q("payFileText").textContent = "📷 " + f.name;
+      q("payFileLabel").classList.add("has");
+      q("payErr").style.display = "none";
+    };
+    rd.readAsDataURL(f);
+  });
+  if(q("paySubmitBtn")) q("paySubmitBtn").addEventListener("click", submitPayRequest);
+  if(q("adminUnlockBtn")) q("adminUnlockBtn").addEventListener("click", adminUnlock);
+  if(q("adminKeyInput")) q("adminKeyInput").addEventListener("keydown", e => { if(e.key === "Enter") adminUnlock(); });
+  if(q("adminRefreshBtn")) q("adminRefreshBtn").addEventListener("click", adminLoadAll);
+  if(q("paySaveBtn")) q("paySaveBtn").addEventListener("click", adminSavePaySettings);
+  /* اگر کلید ذخیره شده، خودکار باز کن */
+  const savedKey = sessionStorage.getItem("hp_admin_key");
+  if(savedKey && q("adminKeyInput")){ q("adminKeyInput").value = savedKey; adminUnlock(); }
+});
 
 function unlock(){
   unlocked = true;
@@ -2140,6 +2474,34 @@ document.getElementById("accountLogoutBtn").addEventListener("click", async () =
   showLock();
 })();
 </script>
+
+<!-- v10.3: مودال خرید پلن -->
+<div class="pay-overlay" id="payOverlay">
+  <div class="pay-box">
+    <div class="pay-head">
+      <span id="payTitle">خرید پلن</span>
+      <button class="pay-close" id="payCloseBtn">✕</button>
+    </div>
+    <div class="pay-body">
+      <div class="pay-lbl">مبلغ قابل پرداخت</div>
+      <div class="pay-amount" id="payAmount"></div>
+      <div class="pay-lbl">پرداخت به حسابپی</div>
+      <div class="pay-num-row">
+        <span id="payNumber" dir="ltr"></span>
+        <button class="pay-copy" id="payCopyBtn">کپی</button>
+      </div>
+      <p class="pay-hint" id="payHint">مبلغ را دقیقاً به این شماره حسابپی بفرست، بعد عکس رسید واریزی را آپلود کن. پس از تأیید مدیر، پلن همان لحظه فعال می‌شود.</p>
+      <label class="pay-file" id="payFileLabel">
+        <input type="file" id="payFile" accept="image/*" hidden>
+        <span id="payFileText">📷 انتخاب عکس رسید واریزی</span>
+      </label>
+      <img id="payPreview" class="pay-preview" alt="">
+      <textarea class="pay-note" id="payNote" placeholder="یادداشت اختیاری برای مدیر — مثلاً شماره تراکنس"></textarea>
+      <button class="pay-submit" id="paySubmitBtn">ارسال درخواست</button>
+      <div class="pay-err" id="payErr"></div>
+    </div>
+  </div>
+</div>
 
 <div class="app-modal-overlay" id="appModalOverlay">
   <div class="app-modal-box">
