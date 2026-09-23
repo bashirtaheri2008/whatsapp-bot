@@ -2425,6 +2425,50 @@ app.get("/api/admin/user-detail", (req, res) => {
   });
 });
 
+/* v10.8: پاک‌سازی کامل سیستم — همه کاربران از صفر (فقط با کلید ادمین + تأیید WIPE) */
+app.post("/api/admin/wipe-all", async (req, res) => {
+  if(String((req.body || {}).confirm || "") !== "WIPE"){
+    return res.json({ ok: false, error: "برای تأیید کامل، فیلد confirm با مقدار WIPE لازم است" });
+  }
+  cloudBlocked = true; /* هیچ بکاپی حین پاک‌سازی پوش نشود */
+  let removed = 0;
+  try{
+    /* ۱) قطع اتصال همه ربات‌های واتساپ و خالی کردن حافظه */
+    for(const [key, u] of Array.from(users.entries())){
+      try{
+        if(u.sock){ try{ await u.sock.logout(); }catch(e){} try{ u.sock.end(undefined); }catch(e){} }
+        u.sock = null;
+      }catch(e){}
+      users.delete(key);
+      removed++;
+    }
+    /* ۲) پاک‌سازی کامل دیتای دیسک (پروفایل‌ها، فیش‌ها، سشن‌های واتساپ) */
+    try{ fs.rmSync(USERS_DIR, { recursive: true, force: true }); }catch(e){ console.error("rm users:", e.message); }
+    fs.mkdirSync(USERS_DIR, { recursive: true });
+    /* ۳) حساب‌های ورود خالی؛ سیاست هرکاربر پاک، فقط پیش‌فرض‌ها می‌ماند */
+    credentials.users = {};
+    fs.writeFileSync(CRED_FILE, JSON.stringify(credentials, null, 2));
+    adminState.users = {};
+    fs.writeFileSync(ADMIN_FILE, JSON.stringify(adminState, null, 2));
+    /* ۴) ایندکس کاربران صفر */
+    pushedShaCache.clear();
+    saveUserIndex();
+    cloudBlocked = false;
+    /* ۵) فایل‌های پاک‌شده به مخزن ابری پوش شوند */
+    saveCredentials();
+    saveAdmin();
+    if(cloudEnabled()){
+      ghPutFile("users/index.json", path.join(USERS_DIR, "index.json")).catch(() => {});
+    }
+    console.log("🧹 پاک‌سازی کامل انجام شد — " + removed + " کاربر حذف شد؛ سیستم از صفر");
+    res.json({ ok: true, removed: removed });
+  }catch(e){
+    cloudBlocked = false;
+    console.error("wipe-all:", e.message);
+    res.json({ ok: false, error: "خطا در پاک‌سازی: " + e.message });
+  }
+});
+
 /* v10.3.1: تغییر دستی پلن کاربر از پنل مدیریت جدا */
 app.post("/api/admin/user-plan", (req, res) => {
   const gid = String(req.body.gid || "");
