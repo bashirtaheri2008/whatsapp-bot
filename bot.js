@@ -1587,10 +1587,11 @@ class UserBot {
       lastSeen: Date.now()
     };
 
-    this.runtimeConfig = { targetGroups: [], allowedNumbers: [], enabled: true };
+    /* v10.6: کاربر تازه‌کار با قابلیت‌ها خاموش شروع می‌کند؛ خودش روشن می‌کند */
+    this.runtimeConfig = { targetGroups: [], allowedNumbers: [], enabled: false };
     this.receipts = { list: [] };
     this.confirmCfg = {
-      enabled: true, /* v9.8.3: فعال‌سازی واقعی = اجازه مدیر؛ کاربران قبلی با وضعیت ذخیره‌شده خودشان می‌مانند */
+      enabled: false, /* v10.6: پیش‌فرض خاموش برای کاربر تازه‌کار؛ کاربران قبلی با وضعیت ذخیره‌شده می‌مانند */
       ownerJid: null,
       ownerName: "",
       sourceGroups: [],
