@@ -31,7 +31,7 @@ const execFileAsync = promisify(execFile);
 
 const AI_GATEWAY = {
   url: "https://ai-whatsapp-bot-2z0k.onrender.com",
-  key: "admin",
+  key: "hamgab-ai-gateway-2026",
   rpmPerKey: 700,
   statusRefreshMs: 30 * 1000
 };
