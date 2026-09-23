@@ -2688,12 +2688,62 @@ app.get("/api/auth/me", (req, res) => {
   if(!gid) return res.status(401).json({ error: "unauthorized" });
   const u = getUser(gid);
   if(!u) return res.status(401).json({ error: "unauthorized" });
-  res.json({ gid: u.gid, email: u.meta.email, name: u.meta.name, picture: u.meta.picture });
+  res.json({ gid: u.gid, email: u.meta.email, name: u.meta.name, picture: u.meta.picture, username: credForGid(u.gid) || "" });
 });
 
 app.post("/api/auth/logout", (req, res) => {
   clearSessionCookie(res);
   res.json({ ok: true });
+});
+
+/* v9.9.7: پروفایل کاربر — نام/عکس نمایه + تعیین نام کاربری برای ورود بدون ایمیل */
+function credForGid(gid){
+  for(const un in credentials.users){
+    if(credentials.users[un].gid === gid) return un;
+  }
+  return null;
+}
+
+app.post("/api/profile", (req, res) => {
+  const u = req.user;
+  const b = req.body || {};
+  const name = String(b.name || "").trim();
+  if(name) u.meta.name = name.slice(0, 48);
+  if(typeof b.picture === "string"){
+    if(b.picture === ""){
+      u.meta.picture = "";
+    }else if(/^data:image\/(png|jpe?g|webp);base64,/.test(b.picture) && b.picture.length < 400000){
+      u.meta.picture = b.picture;
+    }else{
+      return res.json({ ok: false, error: "فرمت یا حجم عکس نمایه نامعتبر است" });
+    }
+  }
+  u.saveMeta();
+  const un = credForGid(u.gid);
+  if(un && name){ credentials.users[un].name = u.meta.name; saveCredentials(); }
+  res.json({ ok: true, name: u.meta.name, picture: u.meta.picture || "" });
+});
+
+app.post("/api/profile/username", (req, res) => {
+  const u = req.user;
+  const uname = String((req.body || {}).username || "").trim().toLowerCase();
+  const password = String((req.body || {}).password || "");
+  if(!/^[a-z0-9_.]{3,24}$/.test(uname)){
+    return res.json({ ok: false, error: "نام کاربری: ۳ تا ۲۴ حرف انگلیسی کوچک، عدد، نقطه یا آندرلاین" });
+  }
+  if(password.length < 4){
+    return res.json({ ok: false, error: "رمز عبور حداقل ۴ کاراکتر باشد" });
+  }
+  if(credentials.users[uname] && credentials.users[uname].gid !== u.gid){
+    return res.json({ ok: false, error: "این نام کاربری قبلاً گرفته شده — یکی دیگر انتخاب کن" });
+  }
+  const old = credForGid(u.gid);
+  if(old && old !== uname) delete credentials.users[old];
+  const salt = crypto.randomBytes(16).toString("hex");
+  credentials.users[uname] = { gid: u.gid, salt, hash: hashPass(password, salt), name: u.meta.name || uname, createdAt: Date.now() };
+  saveCredentials();
+  console.log("🔑 نام کاربری تعیین‌شده برای " + u.gid + ": " + uname);
+  res.json({ ok: true, username: uname });
 });
 
 /* v9.8.5: ورود با نام کاربری/رمز عبور (بدون گوگل) */
