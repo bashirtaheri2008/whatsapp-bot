@@ -2391,6 +2391,40 @@ app.get("/api/admin/users", (req, res) => {
   list.sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0));
   res.json({ ok: true, users: list, total: list.length, connected, receiptsTotal, defaults: adminDefaults() });
 });
+/* v10.7: جزئیات کامل یک کاربر برای پنل مدیریت */
+app.get("/api/admin/user-detail", (req, res) => {
+  const gid = String(req.query.gid || "");
+  const u = users.get(gid);
+  if(!u) return res.status(404).json({ ok: false, error: "کاربر پیدا نشد" });
+  const contacts = Object.entries(u.confirmCfg.contacts || {}).map(([jid, name]) => ({ jid, name: name || String(jid).split("@")[0] }));
+  res.json({
+    ok: true,
+    gid,
+    name: u.meta.name || "", email: u.meta.email || "", picture: u.meta.picture || "",
+    username: credForGid(gid),
+    state: u.connectionState, botNumber: u.botNumber || null,
+    lastSeen: u.meta.lastSeen || null, createdAt: u.meta.createdAt || null,
+    plan: planPublic(gid),
+    overrides: adminOverrides(gid),
+    dup: {
+      enabled: u.runtimeConfig.enabled,
+      groups: u.runtimeConfig.targetGroups || [],
+      allowedNumbers: u.runtimeConfig.allowedNumbers || []
+    },
+    confirm: {
+      enabled: !!(u.confirmCfg && u.confirmCfg.enabled),
+      ownerJid: u.confirmCfg.ownerJid || null,
+      ownerName: u.confirmCfg.ownerName || "",
+      sourceGroups: u.confirmCfg.sourceGroups || [],
+      verifierGroups: u.confirmCfg.verifierGroups || [],
+      contacts: contacts, queue: Object.keys(u.confirmCfg.queue || {}).length
+    },
+    receipts: u.getReceiptsForPanel().slice(0, 50),
+    receiptsTotal: (u.receipts.list || []).length,
+    queue: { pending: u.queue.length, busy: u.isProcessing }
+  });
+});
+
 /* v10.3.1: تغییر دستی پلن کاربر از پنل مدیریت جدا */
 app.post("/api/admin/user-plan", (req, res) => {
   const gid = String(req.body.gid || "");
