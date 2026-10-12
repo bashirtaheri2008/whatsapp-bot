@@ -194,15 +194,75 @@ function normalizeText(str){
 }
 
 function normalizeIban(str){
-  return toEnglishDigits(String(str || "")).toUpperCase().replace(/[^A-Z0-9]/g, "");
+  let s = toEnglishDigits(String(str || "")).toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if(s.length > 4){
+    const cc = s.slice(0, 2);
+    const rest = s.slice(2).replace(/O/g, "0").replace(/[IJL|]/g, "1").replace(/S/g, "5")
+      .replace(/Z/g, "2").replace(/B/g, "8").replace(/E/g, "8").replace(/G/g, "6")
+      .replace(/Q/g, "0").replace(/D/g, "0");
+    s = cc + rest;
+  }
+  return s;
 }
 
-function normalizeAmount(str){
-  let s = toEnglishDigits(String(str || ""));
-  const num = s.replace(/[^\d.]/g, "");
-  if(!num) return "";
-  return num.replace(/\.0+$/, "").replace(/\.$/, "");
+function normalizeCodeId(str){
+  let s = toEnglishDigits(String(str || "")).toLowerCase().replace(/[^a-z0-9]/g, "");
+  return s.replace(/o/g, "0").replace(/[il|]/g, "1").replace(/s/g, "5")
+          .replace(/z/g, "2").replace(/g/g, "6").replace(/q/g, "9").replace(/b/g, "8");
 }
+
+
+function trFold(s){
+  return toEnglishDigits(String(s || "")).toLowerCase()
+    .replace(/[ıİ]/g, "i").replace(/ş/g, "s").replace(/ğ/g, "g")
+    .replace(/ü/g, "u").replace(/ö/g, "o").replace(/ç/g, "c");
+}
+
+function parseAmountSmart(raw){
+  let s = toEnglishDigits(String(raw || "")).replace(/[^\d.,]/g, "").trim();
+  if(!s) return "";
+  const lastDot = s.lastIndexOf("."), lastComma = s.lastIndexOf(",");
+  let intPart, decPart = "";
+  if(lastDot >= 0 && lastComma >= 0){
+    if(lastComma > lastDot){          /* 80.000,00 → نقطه هزارگان، ویرگول اعشار */
+      intPart = s.slice(0, lastComma).replace(/\./g, "");
+      decPart = s.slice(lastComma + 1);
+    }else{                            /* 5,000.00 → ویرگول هزارگان، نقطه اعشار */
+      intPart = s.slice(0, lastDot).replace(/,/g, "");
+      decPart = s.slice(lastDot + 1);
+    }
+  }else if(lastDot >= 0){
+    const tail = s.slice(lastDot + 1);
+    if(tail.length === 3){            /* 80.000 → هزارگان ترکی */
+      intPart = s.replace(/\./g, "");
+    }else{                            /* 4991.00 → اعشار */
+      intPart = s.slice(0, lastDot);
+      decPart = tail;
+    }
+  }else if(lastComma >= 0){
+    const tail = s.slice(lastComma + 1);
+    if(tail.length === 1 || tail.length === 2){   /* 4991,5 یا 4991,00 → اعشار */
+      intPart = s.slice(0, lastComma).replace(/\./g, "");
+      decPart = tail;
+    }else{                            /* 5,000 یا 80,000 → هزارگان */
+      intPart = s.replace(/,/g, "");
+    }
+  }else{
+    intPart = s;
+  }
+  intPart = String(intPart || "").replace(/^[0]+(?=\d)/, "");
+  if(!intPart) intPart = "0";
+  if(decPart) decPart = (decPart + "00").slice(0, 2);
+  if(decPart && decPart !== "00") return intPart + "." + decPart;
+  return intPart;
+}
+
+/* v11: فرمت ترکی (80.000,00) و انگلیسی (5,000.00) هر دو درست تجزیه می‌شوند —
+   باگ قدیمی که «80.000,00» را به «80.00000» تبدیل می‌کرد رفع شد */
+function normalizeAmount(str){
+  return parseAmountSmart(str);
+}
+
 
 function normalizeDate(str){
   const s = toEnglishDigits(String(str || "")).trim();
@@ -361,96 +421,315 @@ const NUMERIC_FIELDS = [
   { key: "date",          label: "تاریخ",          norm: v => normalizeDate(v) },
 ];
 
+function extractIbans(text){
+  const out = [];
+  const t = String(text || "").replace(/\s+/g, " ");
+  const re = /TR[0-9A-Za-z]{1,2}(?: ?[0-9]{4}){4,6} ?[0-9]{2,4}|TR[0-9A-Za-z]{1,2}[0-9A-Za-z ]{16,40}/g;
+  const seen = new Set();
+  let m;
+  while((m = re.exec(t))){
+    const ib = normalizeIban(m[0]);
+    const digits = (ib.slice(2).match(/\d/g) || []).length;
+    if(ib.length === 26 && digits >= 20 && !seen.has(ib)){ seen.add(ib); out.push(ib); }
+  }
+  return out;
+}
+
+function segAfterLabel(raw, T, labelRegex, span){
+  const m = T.match(labelRegex);
+  if(!m) return "";
+  const start = (m.index || 0) + m[0].length;
+  return raw.substring(start, span ? Math.min(raw.length, start + span) : raw.length);
+}
+
+function cleanName(s){
+  return String(s || "").replace(/[^A-Za-z\u0600-\u06FF. ]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function parseBankReceipt(ocrText){
+  const raw = String(ocrText || "");
+  const T = trFold(raw); /* بدون collapse — اندیس‌ها با raw یکی‌اند */
+  const info = {
+    isReceipt: null, bank: "", bankBranch: "", amount: "", currency: "TL",
+    date: "", time: "", trackingNo: "", receiptNo: "", referenceCode: "",
+    senderName: "", senderIban: "", receiverName: "", receiverIban: "", description: ""
+  };
+  let bankKey = "";
+
+  if(/enpara/.test(T)) bankKey = "enpara";
+  else if(/akbank/.test(T)) bankKey = "akbank";
+  else if(/ziraat/.test(T)) bankKey = "ziraat";
+  else return { bankKey: "", info, quality: 0 };
+
+  info.bank = bankKey === "enpara" ? "Enpara Bank A.S." :
+              bankKey === "akbank" ? "Akbank" : "T.C. Ziraat Bankasi";
+
+  try{
+    if(bankKey === "enpara"){
+      /* SORGU NO — طولانی‌ترین occurrence (در جدول کوتاه خوانده می‌شود) */
+      let bestSorgu = "";
+      for(const m of T.matchAll(/sorgu\s*no\s*:?\s*(\d{6,})/g)){
+        if(m[1].length > bestSorgu.length) bestSorgu = m[1];
+      }
+      info.trackingNo = bestSorgu;
+      const mSira = T.match(/s[ıi]ra\s*no\s*:?\s*([\d\-]{8,})/);
+      if(mSira) info.receiptNo = mSira[1];
+      const mFis = T.match(/f[ıi][şsg]{0,2}n?\s*o\s*:?\s*(\d{10,})/);
+      if(mFis) info.referenceCode = mFis[1];
+      /* مبلغ: بزرگ‌ترین Tutar معتبر */
+      let amt = "";
+      for(const m of T.matchAll(/tutar[ıi]?\s*:?\s*([\d.,]{3,})/g)){
+        const v = parseAmountSmart(m[1]);
+        if(v && parseFloat(v) > 0 && (!amt || parseFloat(v) > parseFloat(amt))) amt = v;
+      }
+      info.amount = amt;
+      const mDT = T.match(/islem tarihi ve saati\s*:?\s*(\d{2})[.\/](\d{2})[.\/](\d{4})[,\s]+(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+      if(mDT){
+        info.date = mDT[1] + "/" + mDT[2] + "/" + mDT[3];
+        info.time = mDT[4].padStart(2, "0") + ":" + mDT[5] + (mDT[6] ? ":" + mDT[6] : "");
+      }
+      /* فرستنده: MUSTERI UNVANI ... IBAN */
+      const segSender = segAfterLabel(raw, T, /musteri unvani\s*:?\s*/, 120);
+      const mSender = segSender.match(/^([^:]*?)\s*IBAN\s*:?\s*(TR[\dA-Za-z ]{16,40})/i);
+      if(mSender){
+        info.senderName = cleanName(mSender[1]).toUpperCase();
+        info.senderIban = mSender[2];
+      }
+      const segRecv = segAfterLabel(raw, T, /al[ıi]c[ıi] unvan[ıi]?\s*:?\s*/, 120);
+      const mRecvName = segRecv.match(/^([^:]*?)\s*AL[İI]C[İI]\s+IBAN/i);
+      if(mRecvName) info.receiverName = cleanName(mRecvName[1]).toUpperCase();
+      const segRecvIban = segAfterLabel(raw, T, /al[ıi]c[ıi] iban\s*:?\s*/, 60);
+      const mRecvIban = segRecvIban.match(/TR[\dA-Za-z ]{16,40}/i);
+      if(mRecvIban) info.receiverIban = mRecvIban[0];
+    }
+
+    if(bankKey === "akbank"){
+      /* تاریخ + ساعت: 16.09.2026 182756 */
+      const mDT = T.match(/(\d{2})[.\/](\d{2})[.\/](\d{4})\s+(\d{2})(\d{2})(\d{2})\b/);
+      if(mDT){
+        info.date = mDT[1] + "/" + mDT[2] + "/" + mDT[3];
+        info.time = mDT[4] + ":" + mDT[5] + ":" + mDT[6];
+      }
+      /* مبلغ: سطر به سطر — سطرهای TOPLAM/KOMISYON/BSMV/MEVDUAT حذف؛ در غیر این صورت TOPLAM پشتیبان */
+      let amt = "", amtToplam = "";
+      for(const line of raw.split(/\r?\n/)){
+        const L = line.toLowerCase();
+        const isExcluded = /toplam|komisyon|bsmv|mevduat/.test(L);
+        const re = /([\d.,]{4,})\s*TL/gi;
+        let m;
+        while((m = re.exec(line))){
+          const v = parseAmountSmart(m[1]);
+          if(!v || parseFloat(v) <= 0) continue;
+          if(isExcluded){ if(/toplam/.test(L)) amtToplam = v; }
+          else if(!amt || parseFloat(v) > parseFloat(amt)) amt = v;
+        }
+      }
+      info.amount = amt || amtToplam;
+      /* فرستنده/گیرنده: سطر دو ستونه با | و برچسب Unvan */
+      for(const line of raw.split(/\r?\n/)){
+        if(/unvan/i.test(line) && line.includes("|")){
+          const parts = line.split("|");
+          const nm = p => {
+            let s = p;
+            if(s.includes(":")) s = s.slice(s.lastIndexOf(":") + 1); /* ستون با دونقطه */
+            else s = s.split(/\s+/).filter(w => !/^(ad|adh|adi|adsoyad|soyad|soyadi|soyadit|soyadiunvan|soyadituinvan|unvan|uinvan|invan|unvani|soyaditunvan)/i.test(w)).join(" ");
+            return cleanName(s).toUpperCase();
+          };
+          if(parts[0]) info.senderName = nm(parts[0]);
+          if(parts[1]) info.receiverName = nm(parts[1]);
+        }
+      }
+      /* دقیق‌تر: سطر İşlem Yapan Ad-Soyad برای فرستنده */
+      for(const line of raw.split(/\r?\n/)){
+        if(/yapan ad[- ]?soyad/i.test(line)){
+          const m = line.match(/soyad[ıi]?\s*:?\s*(.+)$/i);
+          if(m) info.senderName = cleanName(m[1]).toUpperCase();
+        }
+      }
+      /* گیرنده: ALACAKLI HESAP NO TR... */
+      const segRecv = segAfterLabel(raw, T, /alacakl\w*\s+hesap no\s*:?\s*/, 60);
+      const mRecv = segRecv.match(/TR[\dA-Za-z ]{16,40}/i);
+      if(mRecv) info.receiverIban = mRecv[0];
+    }
+
+    if(bankKey === "ziraat"){
+      /* ISLEM TARIHI 16/09/2026-14:30:19 - F04104 */
+      /* جداکننده تاریخ ممکن است در OCR حذف شود: 160972026 یا 16/0972026 — هر دو پذیرفته می‌شوند */
+      const mDT = T.match(/islem tarihi\s*[:\s]*(\d{2})[.\/]?(\d{2,3})[.\/]?(\d{4})-(\d{2}):(\d{2}):(\d{2})\s*-?\s*([a-z0-9]+)?/)
+                 || T.match(/(\d{2})[.\/]?(\d{2,3})[.\/]?(\d{4})-(\d{2}):(\d{2}):(\d{2})/);
+      if(mDT){
+        let month = mDT[2];
+        if(month.length === 3) month = month.slice(0, 2); /* خطای OCR: 097 → 09 */
+        info.date = mDT[1] + "/" + month + "/" + mDT[3];
+        info.time = mDT[4] + ":" + mDT[5] + ":" + mDT[6];
+        if(mDT[7]) info.referenceCode = mDT[7].toUpperCase();
+      }
+      /* مبلغ: Havale Tutari */
+      const mAmt = T.match(/havale tutar[ıi]\s*:?\s*([\d.,]{3,})/);
+      if(mAmt) info.amount = parseAmountSmart(mAmt[1]);
+      /* فرستنده: اولین IBAN + SAYIN نام */
+      const ibans = extractIbans(raw);
+      if(ibans.length) info.senderIban = ibans[0];
+      /* نام فرستنده بعد از IBAN در همان سطر */
+      const mSenderName = T.match(/tr[0-9a-z][0-9a-z]?(?: ?[0-9]{4}){4,6}(?: ?[0-9]{2,4})?\s+([a-z.]{2,}(?: [a-z.]{2,}){1,5})/);
+      if(mSenderName) info.senderName = cleanName(mSenderName[1]).toUpperCase();
+      /* گیرنده: Alacakli IBAN / Adi Soyadi */
+      const segRecvIban = segAfterLabel(raw, T, /alacakl[ıi] iban\s*:?\s*/, 60);
+      const mRecvIban = segRecvIban.match(/TR[\dA-Za-z ]{16,40}/i);
+      if(mRecvIban) info.receiverIban = mRecvIban[0];
+      const mRecvName = T.match(/alacakl[ıi] adi soyadi\s*:?\s*([a-z. ]{3,40})/);
+      if(mRecvName) info.receiverName = cleanName(mRecvName[1]).toUpperCase();
+      /* شعبه */
+      const mSube = T.match(/sube kodu\/adi\s*([\d\/a-z]+)/);
+      if(mSube) info.bankBranch = mSube[1];
+    }
+  }catch(e){
+    console.error("parseBankReceipt:", e.message);
+    return { bankKey, info, quality: 0 };
+  }
+
+  /* کیفیت استخراج */
+  let q = 0;
+  if(info.amount) q += 0.25;
+  if(info.date) q += 0.15;
+  if(info.time) q += 0.1;
+  if(info.receiverIban) q += 0.1;
+  const idOk = (bankKey === "enpara" && info.trackingNo) ||
+               ((bankKey === "akbank" || bankKey === "ziraat") && info.time && info.time.split(":").length === 3);
+  if(idOk) q += 0.2;
+  return { bankKey, info, quality: q };
+}
+
+function buildFingerprint(info, bankKey){
+  const a = normalizeAmount(info.amount);
+  const d = normalizeDate(info.date);
+  const t = normalizeTime(info.time);
+  if(!a || !d) return "";
+  if(bankKey === "enpara"){
+    const s = normalizeCodeId(info.trackingNo);
+    if(s) return "EP|" + s;
+  }
+  if(bankKey === "akbank" || bankKey === "ziraat"){
+    const r = normalizeIban(info.receiverIban);
+    if(t) return (bankKey === "akbank" ? "AK|" : "ZB|") + d + "|" + t + "|" + a + (r ? "|" + r : "");
+  }
+  const r = normalizeIban(info.receiverIban);
+  return "GN|" + d + (t ? "|" + t : "") + "|" + a + (r ? "|" + r : "");
+}
+
+/* ── گارد آگاه به خطای OCR ── */
+function checkGuardDiffers(a, b){
+  const aa = normalizeAmount(a.amount), bb = normalizeAmount(b.amount);
+  if(aa && bb){
+    const na = parseFloat(aa), nb = parseFloat(bb);
+    if(isNaN(na) || isNaN(nb)){ if(aa !== bb) return { differs: true, label: "مبلغ" }; }
+    else if(Math.abs(na - nb) > 0.011) return { differs: true, label: "مبلغ" };
+  }
+  const da = normalizeDate(a.date), db = normalizeDate(b.date);
+  if(da && db && da !== db) return { differs: true, label: "تاریخ" };
+  for(const k of ["senderIban", "receiverIban"]){
+    const ia = normalizeIban(a[k]), ib = normalizeIban(b[k]);
+    if(ia && ib && ia !== ib && similarity(ia, ib) < 0.95)
+      return { differs: true, label: k === "senderIban" ? "IBAN فرستنده" : "IBAN گیرنده" };
+  }
+  for(const k of ["trackingNo", "receiptNo", "referenceCode"]){
+    const ca = normalizeCodeId(a[k]), cb = normalizeCodeId(b[k]);
+    if(ca && cb && ca !== cb && similarity(ca, cb) < 0.85)
+      return { differs: true, label: "کد یکتا" };
+  }
+  const ta = normalizeTime(a.time), tb = normalizeTime(b.time);
+  if(ta && tb && !timeExactMatch(ta, tb)) return { differs: true, label: "ساعت" };
+  return { differs: false, label: "" };
+}
+
+/* ==================================================
+   FIND DUPLICATE v11 — اثر انگشت بانکی + گارد OCR-aware + کد یکتا نرمال‌شده
+   ================================================== */
+
 function findDuplicateByVision(list, newInfo){
   if(!list || !list.length) return null;
-
-  const nTime = normalizeTime(newInfo.time);
+  const nFp = newInfo.fingerprint || buildFingerprint(newInfo, newInfo.bankKey || "");
 
   for(const existing of list){
-    let differs = false;
-    let guardLabel = "";
-    for(const f of NUMERIC_FIELDS){
-      const nv = f.norm(newInfo[f.key]);
-      const ov = f.norm(existing.data[f.key]);
-      if(nv && ov && nv !== ov){
-        differs = true;
-        guardLabel = f.label;
-        break;
-      }
-    }
-    if(!differs && nTime && normalizeTime(existing.data.time) &&
-       !timeExactMatch(nTime, normalizeTime(existing.data.time))){
-      differs = true;
-      guardLabel = "ساعت";
-    }
-    if(differs){
-      console.log("🛡 گارد سخت‌گیرانه: «" + guardLabel + "» متفاوت است → تکراری نیست");
-      continue;
+    const rd = existing.data || {};
+
+    /* لایه صفر: اثر انگشت بانکی */
+    const eFp = rd.fingerprint || buildFingerprint(rd, rd.bankKey || "");
+    if(nFp && eFp && nFp === eFp){
+      return { score: 1.0, layer: "fingerprint", record: existing,
+        details: [{ key: "fingerprint", label: "اثر انگشت بانکی", status: "exact", match: true, a: eFp, b: nFp }] };
     }
 
+    /* گارد */
+    const guard = checkGuardDiffers(newInfo, rd);
+    if(guard.differs) continue;
+
+    /* لایه کد یکتا (با نرمال‌سازی خطای OCR) */
     const idChecks = [
       { key: "trackingNo",    label: "شماره پیگیری",    min: 5 },
       { key: "receiptNo",     label: "شماره قواره فیش", min: 5 },
       { key: "referenceCode", label: "کد مرجع",         min: 5 },
     ];
     for(const c of idChecks){
-      const nv = normalizeText(newInfo[c.key]);
-      const ov = normalizeText(existing.data[c.key]);
+      const nv = normalizeCodeId(newInfo[c.key]);
+      const ov = normalizeCodeId(rd[c.key]);
       if(nv && nv.length >= c.min && nv === ov){
-        console.log("✅ تکراری (کد یکتا):", c.label, "یکسان →", nv);
         return { score: 1.0, layer: c.key, record: existing,
-          details: [{ key: c.key, label: c.label, status: "exact", match: true,
-            a: existing.data[c.key], b: newInfo[c.key] }] };
+          details: [{ key: c.key, label: c.label, status: "exact", match: true, a: rd[c.key], b: newInfo[c.key] }] };
       }
     }
 
-    const nS = normalizeIban(newInfo.senderIban);
-    const oS = normalizeIban(existing.data.senderIban);
-    const nA = normalizeAmount(newInfo.amount);
-    const oA = normalizeAmount(existing.data.amount);
-    const nR = normalizeIban(newInfo.receiverIban);
-    const oR = normalizeIban(existing.data.receiverIban);
-    const nD = normalizeDate(newInfo.date);
-    const oD = normalizeDate(existing.data.date);
-
+    /* لایه ترکیب کامل */
+    const nS = normalizeIban(newInfo.senderIban), oS = normalizeIban(rd.senderIban);
+    const nA = normalizeAmount(newInfo.amount),  oA = normalizeAmount(rd.amount);
+    const nR = normalizeIban(newInfo.receiverIban), oR = normalizeIban(rd.receiverIban);
+    const nD = normalizeDate(newInfo.date), oD = normalizeDate(rd.date);
+    const amountEq = (x, y) => {
+      const px = parseFloat(x), py = parseFloat(y);
+      if(isNaN(px) || isNaN(py)) return x === y;
+      return Math.abs(px - py) <= 0.011;
+    };
     if(nS && oS && nA && oA && nR && oR && nD && oD &&
-       nS === oS && nA === oA && nR === oR && nD === oD){
-      console.log("✅ تکراری (ترکیب کامل): IBAN فرستنده + مبلغ + IBAN گیرنده + تاریخ همه دقیقاً یکسان");
+       nS === oS && amountEq(nA, oA) && nR === oR && nD === oD){
       return { score: 0.99, layer: "Strict-Full-Match", record: existing,
         details: [
-          { key: "senderIban",   label: "IBAN فرستنده", status: "exact", match: true, a: existing.data.senderIban,   b: newInfo.senderIban },
-          { key: "amount",      label: "مبلغ",         status: "exact", match: true, a: existing.data.amount,      b: newInfo.amount },
-          { key: "receiverIban",label: "IBAN گیرنده",  status: "exact", match: true, a: existing.data.receiverIban,b: newInfo.receiverIban },
-          { key: "date",        label: "تاریخ",        status: "exact", match: true, a: existing.data.date,        b: newInfo.date },
-          ...(nTime && normalizeTime(existing.data.time)
-            ? [{ key: "time", label: "ساعت", status: "exact", match: true, a: existing.data.time, b: newInfo.time }] : [])
+          { key: "senderIban", label: "IBAN فرستنده", status: "exact", match: true, a: rd.senderIban, b: newInfo.senderIban },
+          { key: "amount", label: "مبلغ", status: "exact", match: true, a: rd.amount, b: newInfo.amount },
+          { key: "receiverIban", label: "IBAN گیرنده", status: "exact", match: true, a: rd.receiverIban, b: newInfo.receiverIban },
+          { key: "date", label: "تاریخ", status: "exact", match: true, a: rd.date, b: newInfo.date }
         ] };
     }
   }
-
-  console.log("❌ تکراری نیست");
   return null;
 }
 
 /* ==================================================
    VERIFY DUPLICATE — راستی‌آزمایی دومرحله‌ای پیش از اعلام قطعی
-   قانون: تکراری فقط وقتی اعلام می‌شود که دو خواندن مستقلِ AI
-   همنظر باشند و با رکورد ذخیره‌شده بخوانند. شک = به نفع فیش.
+   قانون: تکراری فقط وقتی اعلام می‌شود که دو خواندن مستقل همنظر باشند.
    ================================================== */
 
 function readableCode(v){
-  v = normalizeText(v);
-  return v && v.length >= 5 ? v : null;
+  if(!v) return null;
+  const n = normalizeCodeId(v);
+  return n && n.length >= 5 ? n : null;
 }
 
 function verifyDuplicateDecision(info, info2, record, layer){
   const rd = (record && record.data) || {};
-
-  /* خواندن دوم ناموفق بود → قابل اطمینان نیست → تکراری اعلام نمی‌شود */
   if(!info2 || info2.isReceipt === false)
     return { confirmed: false, reason: "خواندن دوم ناموفق" };
 
-  /* ثبات خوانش: مبلغ و IBAN فرستنده باید در دو خواندن یکسان باشند */
+  /* لایه اثر انگشت */
+  if(layer === "fingerprint"){
+    const f1 = info.fingerprint || buildFingerprint(info, info.bankKey || "");
+    const f2 = info2.fingerprint || buildFingerprint(info2, info2.bankKey || "");
+    const f0 = rd.fingerprint || buildFingerprint(rd, rd.bankKey || "");
+    if(f1 && f1 === f2 && f1 === f0)
+      return { confirmed: true, reason: "اثر انگشت بانکی در دو خواندن مستقل تأیید شد" };
+    return { confirmed: false, reason: "اثر انگشت در خواندن دوم تأیید نشد" };
+  }
+
+  /* ثبات خوانش */
   if(normalizeAmount(info.amount) && normalizeAmount(info2.amount) &&
      normalizeAmount(info.amount) !== normalizeAmount(info2.amount))
     return { confirmed: false, reason: "مبلغ در دو خواندن متفاوت خوانده شد" };
@@ -459,20 +738,16 @@ function verifyDuplicateDecision(info, info2, record, layer){
     return { confirmed: false, reason: "IBAN فرستنده در دو خواندن متفاوت خوانده شد" };
 
   const UNIQUE_KEYS = ["trackingNo", "receiptNo", "referenceCode"];
-
-  /* ── لایه کد یکتا: همان کد باید در خواندن دوم هم دقیقاً بیاید ── */
   if(UNIQUE_KEYS.includes(layer)){
-    const v1 = normalizeText(info[layer]);
-    const v2 = normalizeText(info2[layer]);
-    const v0 = normalizeText(rd[layer]);
+    const v1 = normalizeCodeId(info[layer]);
+    const v2 = normalizeCodeId(info2[layer]);
+    const v0 = normalizeCodeId(rd[layer]);
     if(v1 && v2 && v1 === v2 && v1 === v0)
       return { confirmed: true, reason: "کد یکتا (" + layer + ") در دو خواندن مستقل تأیید شد" };
     return { confirmed: false, reason: "خواندن دوم کد یکتا را تأیید نکرد" };
   }
 
-  /* ── لایه ترکیب کامل: فقط با ساعتِ با ثانیه، یکسان در هر سه خوانش ── */
   if(layer === "Strict-Full-Match"){
-    /* اگر هر خواندنی شماره یکتایی خواند، این لایه قابل اتکا نیست */
     for(const k of UNIQUE_KEYS){
       if(readableCode(info[k]) || readableCode(info2[k]))
         return { confirmed: false, reason: "شماره یکتا در خوانش‌ها حاضر است — لایه ترکیب قابل اتکا نیست" };
@@ -486,9 +761,9 @@ function verifyDuplicateDecision(info, info2, record, layer){
     return { confirmed: false, reason: "ساعت با ثانیه در هر سه خوانش تأیید نشد" };
   }
 
-  /* لایه ناشناخته — محتاطانه: تکراری نیست */
   return { confirmed: false, reason: "لایه ناشناخته" };
 }
+
 
 /* ==================================================
    MESSAGE HELPERS
@@ -690,11 +965,137 @@ async function downloadPdf(sock, msg){
 }
 
 /* ==================================================
-   EXTRACT RECEIPT INFO (Vision) — مشترک
+   OCR ENGINE (tesseract.js) — لایه اول دقت v11
+   OCR متن فیش را استخراج می‌کند → parser مخصوص بانک
+   فیلدها را دقیق و قطعی بیرون می‌کشد؛ vision فقط fallback
+   و تکمیل‌کننده است. تشخیص تکراری با «اثر انگشت بانکی».
    ================================================== */
 
-async function extractReceiptInfo(imageData){
-  const prompt = `تو یک کارشناس خبره استخراج اطلاعات از فیش‌های بانکی هستی. این تصویر را با بیشترین دقت و ذره‌ذره بررسی کن.
+let _ocrWorker = null;
+let _ocrBroken = false;
+let _ocrInitPromise = null;
+
+async function getOcrWorker(){
+  if(_ocrBroken) return null;
+  if(_ocrWorker) return _ocrWorker;
+  if(_ocrInitPromise) return _ocrInitPromise;
+  _ocrInitPromise = (async () => {
+    try{
+      const Tesseract = require("tesseract.js");
+      const w = await Tesseract.createWorker("eng", 1, { logger: () => {} });
+      _ocrWorker = w;
+      console.log("📖 موتور OCR فعال شد (tesseract.js/eng)");
+      return w;
+    }catch(e){
+      _ocrBroken = true;
+      console.warn("⚠️ OCR فعال نشد — ادامه فقط با vision:", e.message);
+      return null;
+    }finally{
+      _ocrInitPromise = null;
+    }
+  })();
+  return _ocrInitPromise;
+}
+
+async function preprocessForOcr(buffer){
+  if(!sharp || !buffer) return buffer;
+  try{
+    return await sharp(buffer)
+      .resize(1800, 1800, { fit: "inside", withoutEnlargement: true })
+      .grayscale()
+      .normalise()
+      .sharpen()
+      .jpeg({ quality: 95 })
+      .toBuffer();
+  }catch(e){ return buffer; }
+}
+
+async function runOcr(buffer){
+  const w = await getOcrWorker();
+  if(!w) return { text: "", confidence: 0 };
+  try{
+    const { data } = await w.recognize(await preprocessForOcr(buffer));
+    return {
+      text: (data && data.text) || "",
+      confidence: (data && typeof data.confidence === "number") ? data.confidence : 0
+    };
+  }catch(e){
+    console.error("OCR recognize:", e.message);
+    try{ await w.terminate(); }catch(_){}
+    _ocrWorker = null;
+    return { text: "", confidence: 0 };
+  }
+}
+
+/* ==================================================
+   EXTRACT RECEIPT INFO — خط دومعی OCR-first v11
+   ۱) OCR → ۲) parser مخصوص بانک (قطعی، رایگان) →
+   ۳) در صورت ناکافی بودن: vision با راهنمای متن OCR → مرج
+   خروجی همان JSON قبلی + bankKey + fingerprint + ocrConfidence
+   ================================================== */
+
+async function extractReceiptInfo(imageInput){
+  /* ورودی: رشته base64 (سازگاری قدیمی) یا { buffer, base64 } */
+  const imageData = typeof imageInput === "string"
+    ? { base64: imageInput, buffer: null }
+    : (imageInput || {});
+
+  /* ── ۱) OCR ── */
+  let ocr = { text: "", confidence: 0 };
+  if(imageData.buffer){
+    try{ ocr = await runOcr(imageData.buffer); }
+    catch(e){ console.error("OCR:", e.message); }
+  }
+
+  /* ── ۲) parser مخصوص بانک ── */
+  const parsed = parseBankReceipt(ocr.text);
+  let info = null;
+
+  if(parsed.quality >= 0.8){
+    info = Object.assign({}, parsed.info, { isReceipt: true });
+    console.log("🏦 " + parsed.bankKey + " — پارس کامل با OCR (بدون AI) | conf:", Math.round(ocr.confidence));
+  }else{
+    /* ── ۳) vision fallback با grounding متن OCR ── */
+    const vinfo = await extractWithVision(imageData.base64, ocr.text, parsed.bankKey);
+    if(parsed.quality > 0.2 && vinfo && vinfo.isReceipt !== false){
+      info = mergeParsedWithVision(parsed, vinfo);
+      console.log("🤝 مرج OCR+vision | bank:", parsed.bankKey || "?", "| quality:", parsed.quality.toFixed(2));
+    }else{
+      info = vinfo;
+    }
+  }
+
+  if(!info) throw new Error("استخراج ناموفق");
+
+  info.bankKey = info.bankKey || parsed.bankKey || "";
+  info.ocrConfidence = Math.round(ocr.confidence);
+  info.fingerprint = buildFingerprint(info, info.bankKey);
+  return info;
+}
+
+function extractBankNote(bankKey){
+  if(bankKey === "enpara")
+    return "این فیش Enpara است: SORGU NO همان شماره پیگیری (trackingNo) مهم است؛ مبلغ اصلی همان Tutar است.";
+  if(bankKey === "akbank")
+    return "این فیش Akbank است: مبلغ حواله (نه TOPLAM) را در amount بگذار؛ IBAN مقابل ALACAKLI HESAP NO مال گیرنده است؛ تاریخ و ساعت دقیق با ثانیه از İşlem Tarihi/Saati خوانده شود.";
+  if(bankKey === "ziraat")
+    return "این فیش Ziraat است: IBAN بالای رسید (زیر SAYIN) مال فرستنده است و Alacakli IBAN مال گیرنده؛ مبلغ اصلی Havale Tutari است نه ردیف Hesabinizdan؛ ساعت دقیق با ثانیه از ISLEM TARIHI خوانده شود.";
+  return "";
+}
+
+function mergeParsedWithVision(parsed, vinfo){
+  const out = Object.assign({}, vinfo);
+  const P = parsed.info;
+  /* فیلدهای پایدارِ parser برنده‌اند؛ vision فقط جاهای خالی را پر می‌کند */
+  for(const k of ["bank","trackingNo","receiptNo","referenceCode","date","time",
+                  "amount","currency","senderIban","receiverIban","senderName","receiverName","bankBranch"]){
+    if(P[k] && String(P[k]).trim()) out[k] = P[k];
+  }
+  return out;
+}
+
+async function extractWithVision(imageDataBase64, ocrText, bankKey){
+  let prompt = `تو یک کارشناس خبره استخراج اطلاعات از فیش‌های بانکی هستی. این تصویر را با بیشترین دقت و ذره‌ذره بررسی کن.
 
 ⚠️ نکات حیاتی:
 1. حتی اگر عکس کج، تار، برش‌خورده یا از زاویه باشه، تمام اطلاعات را با دقت بخوان
@@ -707,6 +1108,7 @@ async function extractReceiptInfo(imageData){
 8. ساعت را با بالاترین دقت بخوان: ساعت، دقیقه و ثانیه اگر روی فیش هست (مثال 14:32:07) — ثانیه اگر نوشته شده حتماً ثبت شود
 9. شماره قواره فیش / شماره سند را جدا از شماره پیگیری ثبت کن
 10. هر رقم را مو به مو بدون حدس و بدون رند کردن بخوان — یک رقم اشتباه کل سیستم را خراب می‌کند
+11. مبلغ را به فرمت عددی ساده بدون جداکننده هزارگان بنویس (مثال: 5000 یا 4991.00)
 
 فقط و فقط JSON برگردان (بدون هیچ متن اضافی، بدون markdown):
 
@@ -730,6 +1132,18 @@ async function extractReceiptInfo(imageData){
 
 اگر فیلدی در فیش نیست، "" بگذار. فقط JSON برگردان.`;
 
+  if(ocrText && ocrText.trim().length > 40){
+    prompt += `
+
+🔍 متن OCR استخراج‌شده از همین تصویر (ممکن است خطای کاراکتر داشته باشد — آن را با آنچه می‌بینی تطبیق بده؛ هرجا متن با تصویر هم‌خوان بود به آن اعتماد کن):
+<<<
+${ocrText.trim()}
+>>>`;
+  }
+
+  const bankNote = extractBankNote(bankKey);
+  if(bankNote) prompt += "\n\n🏦 راهنمای این بانک: " + bankNote;
+
   const MAX_ATTEMPTS = 6; // گیت‌وی خودش کلیدها را می‌چرخاند
 
   for(let attempt = 0; attempt < MAX_ATTEMPTS; attempt++){
@@ -749,7 +1163,7 @@ async function extractReceiptInfo(imageData){
             role: "user",
             content: [
               { type: "text", text: prompt },
-              { type: "image_url", image_url: { url: imageData } }
+              { type: "image_url", image_url: { url: imageDataBase64 } }
             ]
           }],
           temperature: 0.0,
@@ -780,15 +1194,13 @@ async function extractReceiptInfo(imageData){
       if(start >= 0 && end > start) content = content.slice(start, end + 1);
 
       const info = JSON.parse(content);
-      console.log("📄 اطلاعات استخراج‌شده:");
+      console.log("📄 اطلاعات استخراج‌شده (vision):");
       console.log("   مبلغ:", info.amount, info.currency);
       console.log("   تاریخ:", info.date, info.time);
       console.log("   Tracking:", info.trackingNo);
       console.log("   Reference:", info.referenceCode);
       console.log("   IBAN فرستنده:", info.senderIban);
       console.log("   IBAN گیرنده:", info.receiverIban);
-      console.log("   نام فرستنده:", info.senderName);
-      console.log("   نام گیرنده:", info.receiverName);
       return info;
 
     }catch(e){
@@ -802,6 +1214,7 @@ async function extractReceiptInfo(imageData){
 
   throw new Error("همه کلیدها تلاش شدن ولی موفق نشد");
 }
+
 
 /* ==================================================
    CLOUD BACKUP (GitHub) — چندکاربره
@@ -2019,7 +2432,7 @@ class UserBot {
   async handleReceipt(imageData, senderNumber, source = "image", msgKey = null){
     let info;
     try{
-      info = await extractReceiptInfo(imageData.base64);
+      info = await extractReceiptInfo(imageData);
     }catch(e){
       console.error("extractReceiptInfo نهایی:", e.message);
       return { status: "error", message: source === "pdf" ? MSG_PDF_ERROR : MSG_ERROR };
@@ -2034,7 +2447,7 @@ class UserBot {
       console.log("🔁 کاندید تکراری (لایه " + dup.layer + ") — راستی‌آزمایی با خواندن دوم...");
       let verdict = { confirmed: false, reason: "خواندن دوم انجام نشد" };
       try{
-        const info2 = await extractReceiptInfo(imageData.base64);
+        const info2 = await extractReceiptInfo(imageData);
         verdict = verifyDuplicateDecision(info, info2, dup.record, dup.layer);
         /* دقت ثبت: کدهای جاافتاده از خواندن دوم پر می‌شوند (فقط فیلدهای خالی) */
         if(info2 && info2.isReceipt !== false){
@@ -2157,7 +2570,7 @@ class UserBot {
       }
 
       let info = null;
-      try{ info = await extractReceiptInfo(imageData.base64); }catch(e){ info = null; }
+      try{ info = await extractReceiptInfo(imageData); }catch(e){ info = null; }
 
       if(!info || info.isReceipt === false){
         /* فیش نبود — بی‌صدا رها کن */
