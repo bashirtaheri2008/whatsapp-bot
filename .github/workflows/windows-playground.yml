@@ -1,0 +1,32 @@
+name: Windows Playground
+
+# ویندوز موقتی برای تجربه — هر بار دستی اجرا می‌شود
+# اجرا: تب Actions در گیت‌هاب → Windows Playground → Run workflow
+# هر اجرا یک ویندوز واقعی می‌سازد، کارها را انجام می‌دهد و بعدش پاک می‌شود
+
+on:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - name: اطلاعات سیستم
+        shell: pwsh
+        run: |
+          Write-Host "=== Welcome to Windows on GitHub Actions ===" -ForegroundColor Cyan
+          $PSVersionTable.PSVersion
+          Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, OSArchitecture
+          Get-CimInstance Win32_Processor | Select-Object Name, NumberOfCores, NumberOfLogicalProcessors
+          Get-CimInstance Win32_ComputerSystem | Select-Object Manufacturer, Model, @{N='RAM(GB)';E={[math]::Round($_.TotalPhysicalMemory/1GB)}}
+          Get-PSDrive -PSProvider FileSystem | Select-Object Name, @{N='Free(GB)';E={[math]::Round($_.Free/1GB)}}
+
+      - name: دستورهای دلخواه (اینجا ویرایش کن و دوباره Run بزن)
+        shell: pwsh
+        run: |
+          Write-Host "سلام بشیر! این یک ویندوز سرور واقعی است 👋"
+          Set-Content -Path C:\hello.txt -Value "Salam az Windows!"
+          Get-Content C:\hello.txt
+          Get-ChildItem C:\ | Select-Object -First 10 Name
+          Write-Host ""
+          Write-Host "برای اجرای دستور جدید: همین فایل را در گیت‌هاب ویرایش کن، Run workflow بزن، و خروجی را در لاگ ببین"
