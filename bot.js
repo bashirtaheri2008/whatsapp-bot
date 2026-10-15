@@ -126,7 +126,7 @@ const MAX_PDF_SIZE = 10 * 1024 * 1024;
 const MAX_CONCURRENT_BOTS = 20;
 
 const QUEUE_DELAY_MS = 500;
-const IMAGE_MAX_DIMENSION = 800;
+const IMAGE_MAX_DIMENSION = 1400;
 
 const COMPARE_FIELDS = [
   { key: "trackingNo",   weight: 5, label: "شماره پیگیری" },
@@ -887,14 +887,14 @@ async function downloadImage(sock, msg){
       try{
         const meta = await sharp(buffer).metadata();
         if(meta.format === "heif" || meta.format === "webp" || meta.format === "png"){
-          finalBuffer = await sharp(buffer).jpeg({ quality: 75 }).toBuffer();
+          finalBuffer = await sharp(buffer).jpeg({ quality: 92 }).toBuffer();
           mimetype = "image/jpeg";
         }
         const newMeta = await sharp(finalBuffer).metadata();
         if(newMeta.width > IMAGE_MAX_DIMENSION || newMeta.height > IMAGE_MAX_DIMENSION){
           finalBuffer = await sharp(finalBuffer)
             .resize(IMAGE_MAX_DIMENSION, IMAGE_MAX_DIMENSION, { fit: "inside", withoutEnlargement: true })
-            .jpeg({ quality: 72 })
+            .jpeg({ quality: 90 })
             .toBuffer();
           mimetype = "image/jpeg";
         }
@@ -965,7 +965,7 @@ async function downloadPdf(sock, msg){
         if(meta.width > IMAGE_MAX_DIMENSION || meta.height > IMAGE_MAX_DIMENSION){
           imgBuffer = await sharp(imgBuffer)
             .resize(IMAGE_MAX_DIMENSION, IMAGE_MAX_DIMENSION, { fit: "inside", withoutEnlargement: true })
-            .jpeg({ quality: 72 })
+            .jpeg({ quality: 90 })
             .toBuffer();
         }
       }catch(e){ console.warn("sharp resize:", e.message); }
