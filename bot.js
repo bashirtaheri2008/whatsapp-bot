@@ -29,41 +29,59 @@ const execFileAsync = promisify(execFile);
    AI GATEWAY — دروازه هوش مصنوعی متمرکز (مشترک بین همه کاربران)
    ================================================== */
 
-const AI_GATEWAY = {
-  url: "https://ai-whatsapp-bot-2z0k.onrender.com",
-  key: "hamgab-ai-gateway-2026",
-  rpmPerKey: 700,
-  statusRefreshMs: 30 * 1000
-};
+/* ==================================================
+   AI DIRECT — اتصال مستقیم به Groq (بدون گیت‌وی) v12
+   چند کلید Groq که خود ربات می‌چرخاند؛ 429 → استراحت کلید و رفتن به بعدی
+   ================================================== */
+
+const GROQ_API_URL = "https://api.groq.com/openai/v1";
+
+const _K_B64 = "Z3NrX2pVc3M1MDNjaWpnSlJRMWdHVjFpV0dkeWIzRllvakJacVlyZ0hpMkY3dm10WngzM0FoeW0sZ3NrX2I3STJ6TW1MTEp1M2JnM3h6bTlZV0dkeWIzRllmeGtQMWk5RlB4V0ZYUlduazBpeHVSSXQsZ3NrXzZ6UTZJTVduSlV1NUl1b1M0amVwV0dkeWIzRlkyQjlQSFFlUGxlOWdDNjdlb2duV3BFRncsZ3NrXzRBN2tiUDhjWHdwN0pubWN3aTZzV0dkeWIzRlk0VThkT0xSUUlmSkVBbVBlZFRhd3dRT1gsZ3NrXzFtQjFUeWVHYjNqeDRkV2RMUWMwV0dkeWIzRllFQnRpeGxlOTVDT053ako3Y0xOUk1XTDAsZ3NrXzFFODRsbnZhbXF0c2tVTUd0QzVWV0dkeWIzRlkzVE9DU3pkNzBMMHBPTGcyQ3FRMWU1Wm4sZ3NrX3ZIclUzNEptN1l1NVQ1eVo2NmlFV0dkeWIzRllhOU94SG41YUVlUFFqcWE5V2wxRDFyYnAsZ3NrX1JNeUFaTmtFMjFYSzdtUWhadTV4V0dkeWIzRllZTE12OThsaG1URTg4RVRDaVhUSzl4bTUsZ3NrX3pkOHVRenZ1Zzh4OXBGamVxRTc0V0dkeWIzRlkyQUNENnI1eXdmUjl6d01ZenFqbW52a08sZ3NrX3dkaUkwNDZQTUp3ZmhBcFV5YTgzV0dkeWIzRllCaE8zWjFzY1lFYUxQemNwaWs1RGd4ZDQsZ3NrX1RJUFNhbkU3YkFjQWpDTGR0MWR4V0dkeWIzRllwMTVBM0ZTM292cDNsVDgxT25QSHJXSXo=";
+
+const GROQ_KEYS = (
+  process.env.GROQ_KEYS ? process.env.GROQ_KEYS.split(",").map(k => k.trim()).filter(Boolean)
+  : Buffer.from(_K_B64, "base64").toString("utf8").split(",").filter(Boolean)
+);
 
 const keyManager = {
-  cache: { totalKeys: 0, active: 0, cooling: 0 },
+  exhausted: new Array(GROQ_KEYS.length).fill(0),
+  cursor: 0,
+  cache: { totalKeys: GROQ_KEYS.length, active: GROQ_KEYS.length, cooling: 0 },
+  rpmPerKey: 30,
 
   init(){
-    console.log("🤖 متصل به دروازه هوش مصنوعی مرکزی:", AI_GATEWAY.url);
+    console.log("🤖 حالت مستقیم Groq —", GROQ_KEYS.length, "کلید فعال (بدون گیت‌وی)");
     this.refreshStatus();
-    setInterval(() => this.refreshStatus(), AI_GATEWAY.statusRefreshMs);
+    setInterval(() => this.refreshStatus(), 30 * 1000);
   },
 
   async refreshStatus(){
-    try{
-      const res = await fetch(AI_GATEWAY.url + "/status", { signal: AbortSignal.timeout(8000) });
-      const d = await res.json();
-      this.cache = { totalKeys: d.totalKeys || 0, active: d.active || 0, cooling: d.cooling || 0 };
-    }catch(e){
-      console.error("خطا در دریافت وضعیت گیت‌وی:", e.message);
-    }
+    const now = Date.now();
+    let active = 0, cooling = 0;
+    for(const t of this.exhausted){ if(t > now) cooling++; else active++; }
+    this.cache = { totalKeys: GROQ_KEYS.length, active, cooling };
   },
 
   getNext(){
-    return { key: AI_GATEWAY.key, index: 0 };
+    const now = Date.now();
+    for(let i = 0; i < GROQ_KEYS.length; i++){
+      const idx = (this.cursor + i) % GROQ_KEYS.length;
+      if(this.exhausted[idx] <= now){
+        this.cursor = (idx + 1) % GROQ_KEYS.length;
+        return { key: GROQ_KEYS[idx], index: idx };
+      }
+    }
+    return { key: GROQ_KEYS[0], index: 0 };
   },
 
   markExhausted(index, waitMs){
-    console.log("⏳ دروازه AI → استراحت " + (waitMs / 1000).toFixed(1) + " ثانیه");
+    this.exhausted[index] = Date.now() + waitMs;
+    console.log("⏳ کلید " + (index + 1) + "/" + GROQ_KEYS.length + " → استراحت " + (waitMs / 1000).toFixed(1) + " ثانیه");
   },
 
-  markHealthy(index){},
+  markHealthy(index){
+    this.exhausted[index] = 0;
+  },
 
   power(){
     const c = this.cache;
@@ -71,9 +89,9 @@ const keyManager = {
       totalKeys: c.totalKeys,
       active: c.active,
       cooling: c.cooling,
-      rpmPerKey: AI_GATEWAY.rpmPerKey,
-      totalPower: c.active * AI_GATEWAY.rpmPerKey,
-      gateway: AI_GATEWAY.url
+      rpmPerKey: this.rpmPerKey,
+      totalPower: c.active * this.rpmPerKey,
+      gateway: "direct-groq"
     };
   },
 
@@ -94,13 +112,12 @@ let VISION_MODEL = null;
 const TEXT_PRIORITY = [
   "openai/gpt-oss-120b",
   "openai/gpt-oss-20b",
-  "llama-3.1-8b-instant",
-  "gemma2-9b-it"
+  "qwen/qwen3.8-27b"
 ];
 
 const VISION_PRIORITY = [
   "qwen/qwen3.8-27b",
-  "qwen/qwen3.6-27b"
+  "openai/gpt-oss-120b"
 ];
 
 const MAX_IMAGE_SIZE = 4 * 1024 * 1024;
@@ -109,7 +126,7 @@ const MAX_PDF_SIZE = 10 * 1024 * 1024;
 const MAX_CONCURRENT_BOTS = 20;
 
 const QUEUE_DELAY_MS = 500;
-const IMAGE_MAX_DIMENSION = 1400;
+const IMAGE_MAX_DIMENSION = 800;
 
 const COMPARE_FIELDS = [
   { key: "trackingNo",   weight: 5, label: "شماره پیگیری" },
@@ -803,7 +820,7 @@ function buildQuoted(msgKey){
 async function detectModels(){
   try{
     const { key, index } = keyManager.getNext();
-    const res = await fetch(AI_GATEWAY.url + "/v1/models", {
+    const res = await fetch(GROQ_API_URL + "/models", {
       headers: { "Authorization": "Bearer " + key }
     });
 
@@ -870,14 +887,14 @@ async function downloadImage(sock, msg){
       try{
         const meta = await sharp(buffer).metadata();
         if(meta.format === "heif" || meta.format === "webp" || meta.format === "png"){
-          finalBuffer = await sharp(buffer).jpeg({ quality: 92 }).toBuffer();
+          finalBuffer = await sharp(buffer).jpeg({ quality: 75 }).toBuffer();
           mimetype = "image/jpeg";
         }
         const newMeta = await sharp(finalBuffer).metadata();
         if(newMeta.width > IMAGE_MAX_DIMENSION || newMeta.height > IMAGE_MAX_DIMENSION){
           finalBuffer = await sharp(finalBuffer)
             .resize(IMAGE_MAX_DIMENSION, IMAGE_MAX_DIMENSION, { fit: "inside", withoutEnlargement: true })
-            .jpeg({ quality: 90 })
+            .jpeg({ quality: 72 })
             .toBuffer();
           mimetype = "image/jpeg";
         }
@@ -948,7 +965,7 @@ async function downloadPdf(sock, msg){
         if(meta.width > IMAGE_MAX_DIMENSION || meta.height > IMAGE_MAX_DIMENSION){
           imgBuffer = await sharp(imgBuffer)
             .resize(IMAGE_MAX_DIMENSION, IMAGE_MAX_DIMENSION, { fit: "inside", withoutEnlargement: true })
-            .jpeg({ quality: 90 })
+            .jpeg({ quality: 72 })
             .toBuffer();
         }
       }catch(e){ console.warn("sharp resize:", e.message); }
@@ -1151,7 +1168,7 @@ ${ocrText.trim()}
 
     try{
       console.log("🔑 تلاش " + (attempt + 1) + "/" + MAX_ATTEMPTS + " — دروازه مرکزی");
-      const res = await fetch(AI_GATEWAY.url + "/v1/chat/completions", {
+      const res = await fetch(GROQ_API_URL + "/chat/completions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
