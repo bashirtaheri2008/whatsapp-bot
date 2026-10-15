@@ -893,6 +893,7 @@ async function downloadImage(sock, msg){
         const newMeta = await sharp(finalBuffer).metadata();
         if(newMeta.width > IMAGE_MAX_DIMENSION || newMeta.height > IMAGE_MAX_DIMENSION){
           finalBuffer = await sharp(finalBuffer)
+            .sharpen({ sigma: 1.2 })
             .resize(IMAGE_MAX_DIMENSION, IMAGE_MAX_DIMENSION, { fit: "inside", withoutEnlargement: true })
             .jpeg({ quality: 90 })
             .toBuffer();
@@ -964,6 +965,7 @@ async function downloadPdf(sock, msg){
         const meta = await sharp(imgBuffer).metadata();
         if(meta.width > IMAGE_MAX_DIMENSION || meta.height > IMAGE_MAX_DIMENSION){
           imgBuffer = await sharp(imgBuffer)
+            .sharpen({ sigma: 1.2 })
             .resize(IMAGE_MAX_DIMENSION, IMAGE_MAX_DIMENSION, { fit: "inside", withoutEnlargement: true })
             .jpeg({ quality: 90 })
             .toBuffer();
