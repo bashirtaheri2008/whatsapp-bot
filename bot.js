@@ -9,7 +9,8 @@ const {
   useMultiFileAuthState,
   DisconnectReason,
   fetchLatestWaWebVersion,
-  downloadMediaMessage
+  downloadMediaMessage,
+  downloadContentFromMessage
 } = require("@whiskeysockets/baileys");
 const { Boom } = require("@hapi/boom");
 const pino = require("pino");
@@ -2398,6 +2399,50 @@ class UserBot {
 
           if(this.runtimeConfig.allowedNumbers.length > 0 &&
              !this.runtimeConfig.allowedNumbers.includes(senderNumber)) continue;
+
+          /* v12.1: فرمان .vv — باز کردن عکس/ویدیوی «یک‌بارمصرف» (view once) که روی آن ریپلای شده */
+          {
+            const rawText = String(msg.message?.conversation || msg.message?.extendedTextMessage?.text || "").trim();
+            if(rawText === ".vv"){
+              this.enqueueTask(async () => {
+                try{
+                  const q = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage || {};
+                  let media = null, kind = null;
+                  for(const w of [q, q.viewOnceMessage, q.viewOnceMessageV2, q.viewOnceMessageV3]){
+                    if(!w) continue;
+                    for(const k of ["image", "video"]){
+                      const m = w[k + "Message"];
+                      if(m){ media = m; kind = k; break; }
+                    }
+                    if(media) break;
+                  }
+                  const isVO = !media ? false
+                    : !!(media.viewOnce || media.viewOnceV2 || media.viewOnceV3) || !!(q.viewOnceMessage || q.viewOnceMessageV2 || q.viewOnceMessageV3);
+                  if(!media || !isVO){
+                    await sock.sendMessage(rJid,
+                      { text: "❌ روی یک عکس یا ویدیوی «یک‌بارمصرف» ریپلای کن و بنویس .vv" },
+                      { quoted: msg });
+                    return;
+                  }
+                  const stream = await downloadContentFromMessage(media, kind);
+                  let buffer = Buffer.alloc(0);
+                  for await (const chunk of stream) buffer = Buffer.concat([buffer, chunk]);
+                  await sock.sendMessage(rJid,
+                    kind === "image" ? { image: buffer } : { video: buffer },
+                    { quoted: msg });
+                  console.log("👁 [" + this.gid.slice(0, 10) + "] .vv: " + kind + " باز شد");
+                }catch(e){
+                  console.error(".vv:", e.message);
+                  try{
+                    await sock.sendMessage(rJid,
+                      { text: "❌ باز کردن فایل ممکن نشد؛ ممکن است منقضی شده باشد. دوباره امتحان کن." },
+                      { quoted: msg });
+                  }catch(_){}
+                }
+              });
+              continue;
+            }
+          }
 
           if(msgType !== "image" && msgType !== "pdf") continue;
 
