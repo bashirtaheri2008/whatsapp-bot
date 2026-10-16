@@ -2839,44 +2839,6 @@ app.use("/api/admin", (req, res, next) => {
   next();
 });
 app.get("/api/admin/check", (req, res) => res.json({ ok: true }));
-
-/* v12.2: ساخت نام کاربری از پنل مدیریت — ورود فقط با نام کاربری */
-app.post("/api/admin/create-user", (req, res) => {
-  const uname = String((req.body || {}).username || "").trim().toLowerCase();
-  const name = String((req.body || {}).name || "").trim();
-  if(!/^[a-z0-9_.]{3,24}$/.test(uname)){
-    return res.json({ ok: false, error: "نام کاربری: ۳ تا ۲۴ حرف انگلیسی کوچک، عدد، نقطه یا آندرلاین" });
-  }
-  if(credentials.users[uname]){
-    return res.json({ ok: false, error: "این نام کاربری قبلاً ساخته شده است" });
-  }
-  const salt = crypto.randomBytes(16).toString("hex");
-  const gid = "up_" + uname.replace(/[^a-z0-9_]/g, "") + "_" + crypto.randomBytes(2).toString("hex");
-  credentials.users[uname] = {
-    gid, salt,
-    hash: hashPass(crypto.randomBytes(24).toString("hex"), salt), /* رمز تصادفی — ورود بدون رمز است */
-    name: name || uname, createdAt: Date.now(), panelOnly: true
-  };
-  saveCredentials();
-  ensureUser(gid, { name: name || uname, email: "" }).loadLocal();
-  console.log("🔑 [ادمین] ساخت نام کاربری:", uname);
-  res.json({ ok: true, username: uname, name: name || uname });
-});
-
-/* v12.2: حذف دسترسی ورود یک کاربر (دیتای کاربر حفظ می‌شود) */
-app.post("/api/admin/delete-user", (req, res) => {
-  const uname = String((req.body || {}).username || "").trim().toLowerCase();
-  const rec = credentials.users[uname];
-  if(!rec) return res.json({ ok: false, error: "چنین نام کاربری وجود ندارد" });
-  try{
-    const u = users.get(rec.gid);
-    if(u && u.sock && u.sock.end){ try{ u.sock.end(undefined); }catch(e){} }
-  }catch(e){}
-  delete credentials.users[uname];
-  saveCredentials();
-  console.log("🚫 [ادمین] حذف نام کاربری:", uname);
-  res.json({ ok: true });
-});
 app.get("/api/admin/users", (req, res) => {
   const list = [];
   let connected = 0, receiptsTotal = 0;
@@ -3342,9 +3304,37 @@ app.post("/api/profile/username", (req, res) => {
 
 /* v9.8.5: ورود با نام کاربری/رمز عبور (بدون گوگل) */
 /* v9.9.4: ثبت‌نام خودِ کاربر از صفحه ورود (پنل مستقل هم پشتیبانی می‌کند) */
-/* v12.2: ثبت‌نام مستقیم بسته است — نام کاربری فقط از پنل مدیریت ساخته می‌شود */
 app.post("/api/auth/register", (req, res) => {
-  res.json({ ok: false, error: "ثبت‌نام مستقیم بسته است. نام کاربری را از مدیر بگیرید." });
+  /* ضد اسپم: حداکثر ۵ ثبت‌نام در ساعت از هر IP */
+  const rip = req.ip || "x";
+  const rl = regThrottle.get(rip) || { n: 0, until: 0 };
+  if(rl.until > Date.now() && rl.n >= 5){
+    return res.status(429).json({ ok: false, error: "ثبت‌نام زیاد — یک ساعت بعد دوباره امتحان کن" });
+  }
+  if(rl.until < Date.now()){ rl.n = 0; rl.until = Date.now() + 3600000; }
+  rl.n++;
+  regThrottle.set(rip, rl);
+  const uname = String((req.body || {}).username || "").trim().toLowerCase();
+  const password = String((req.body || {}).password || "");
+  const name = String((req.body || {}).name || "").trim();
+  if(!/^[a-z0-9_.]{3,24}$/.test(uname)){
+    return res.json({ ok: false, error: "نام کاربری: ۳ تا ۲۴ حرف انگلیسی کوچک، عدد، نقطه یا آندرلاین" });
+  }
+  if(password.length < 4){
+    return res.json({ ok: false, error: "رمز عبور حداقل ۴ کاراکتر باشد" });
+  }
+  if(credentials.users[uname]){
+    return res.json({ ok: false, error: "این نام کاربری قبلاً گرفته شده — یکی دیگر انتخاب کن" });
+  }
+  const salt = crypto.randomBytes(16).toString("hex");
+  const gid = "up_" + uname.replace(/[^a-z0-9_]/g, "") + "_" + crypto.randomBytes(2).toString("hex");
+  credentials.users[uname] = { gid, salt, hash: hashPass(password, salt), name: name || uname, createdAt: Date.now() };
+  saveCredentials();
+  ensureUser(gid, { name: name || uname, email: "" }).loadLocal();
+  console.log("🔑 ثبت‌نام نام کاربری:", uname);
+  const secure = (req.headers["x-forwarded-proto"] === "https") || !!process.env.RENDER_EXTERNAL_URL;
+  setSessionCookie(res, gid, secure);
+  res.json({ ok: true, username: uname });
 });
 
 const regThrottle = new Map();
@@ -3360,8 +3350,7 @@ app.post("/api/auth/login", (req, res) => {
   if(f && f.until > Date.now()){
     return res.status(429).json({ ok: false, error: "تلاش زیاد — چند دقیقه بعد دوباره امتحان کن" });
   }
-  /* v12.2: کاربران ساخته‌شده از پنل مدیریت فقط با نام کاربری وارد می‌شوند */
-  if(!rec.panelOnly && !verifyCred(uname, password)){
+  if(!verifyCred(uname, password)){
     const c = ((f && f.count) || 0) + 1;
     loginFails.set(uname, { count: c, until: c >= 5 ? Date.now() + 10 * 60000 : 0 });
     return res.status(401).json({ ok: false, error: "نام کاربری یا رمز عبور نادرست است" });
