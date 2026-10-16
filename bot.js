@@ -1748,14 +1748,10 @@ const SESSION_COOKIE = "wasid";
 const SLOT_COOKIE = "waslot";
 const SLOT_SEP = "--";
 function slotKey(gid, slot){ return (slot && slot > 1) ? gid + SLOT_SEP + slot : gid; }
-/* v10.2: پلن‌های اشتراک — رایگان / پرو / ویژه */
+/* پلن‌ها: فقط پرو و ویژه — تنها محدودیت، زمان اعتبار است (قابل تمدید) */
 const PLANS = {
-  free:    { name: "رایگان", price: "۰ افغانی / هفته",     days: 7,  maxSlots: 1,  maxGroups: 7, dailyReceipts: 100, bothFeatures: false,
-             features: ["۱ حساب واتساپ", "حداکثر ۷ گروه", "۱۰۰ فیش در روز", "یک قابلیت همزمان (دریافت یا تأیید)", "اعتبار ۷ روز"] },
-  pro:     { name: "پرو",    price: "۵۰۰ افغانی / ماه",     days: 30, maxSlots: 3,  maxGroups: 0, dailyReceipts: 0, bothFeatures: true,
-             features: ["تا ۳ حساب واتساپ", "گروه‌های نامحدود", "فیش نامحدود", "هر دو قابلیت همزمان", "تأیید و تأیید کننده بدون محدودیت", "اعتبار ۳۰ روز"] },
-  premium: { name: "ویژه",   price: "۹۹۹ افغانی / ۳ ماه",   days: 90, maxSlots: 20, maxGroups: 0, dailyReceipts: 0, bothFeatures: true,
-             features: ["حساب‌های واتساپ نامحدود", "همه امکانات پرو", "همه امکانات جدید در آینده", "همه امکانات همزمان", "اعتبار ۹۰ روز"] }
+  pro:     { name: "پرو",  price: "۲۵ دالر / ۳۰ روز", days: 30, maxSlots: 99, maxGroups: 0, dailyReceipts: 0, bothFeatures: true, features: [] },
+  premium: { name: "ویژه", price: "۴۵ دالر / ۶۰ روز", days: 60, maxSlots: 99, maxGroups: 0, dailyReceipts: 0, bothFeatures: true, features: [] }
 };
 
 function planInfo(gidBase){
@@ -1764,7 +1760,7 @@ function planInfo(gidBase){
   const now = Date.now();
   let p = u.meta.plan;
   if(!p || !PLANS[p.type]){
-    p = { type: "free", at: now, expires: now + PLANS.free.days * 86400000 };
+    p = { type: "pro", at: now, expires: 0 }; /* بدون پلن — تا فعال‌سازی یا تمدید، منقضی است */
     u.meta.plan = p;
     u.saveMeta();
   }
@@ -1786,7 +1782,7 @@ function planPublic(gidBase){
   };
 }
 
-/* شمارش فیش روزانه — false = سقف رسیده یا پلن منقضی */
+/* بررسی اعتبار پلن — false = پلن منقضی */
 function usageBump(gidBase){
   const info = planInfo(gidBase);
   if(info.expired) return false;
@@ -2378,7 +2374,7 @@ class UserBot {
                 const senderJidC = msg.key.participant || rJid;
                 const senderNumC = senderJidC.split("@")[0].split(":")[0];
                 if(!usageBump(baseGid)){
-                  console.log("⛔ [" + this.gid.slice(0, 10) + "] سقف فیش روزانه پلن " + pInfo.cfg.name + " پر شد — فیش نادیده گرفته شد");
+                  console.log("⛔ [" + this.gid.slice(0, 10) + "] پلن " + pInfo.cfg.name + " منقضی است — فیش نادیده گرفته شد");
                   continue;
                 }
                 console.log("📩 [" + this.gid.slice(0, 10) + "] تایید: ورودی از", senderNumC, "| گروه:", this.groupNameOf(rJid) || rJid);
@@ -2447,7 +2443,7 @@ class UserBot {
           if(msgType !== "image" && msgType !== "pdf") continue;
 
           if(!usageBump(baseGid)){
-            console.log("⛔ [" + this.gid.slice(0, 10) + "] سقف فیش روزانه پلن " + pInfo.cfg.name + " پر شد — فیش نادیده گرفته شد");
+            console.log("⛔ [" + this.gid.slice(0, 10) + "] پلن " + pInfo.cfg.name + " منقضی است — فیش نادیده گرفته شد");
             continue;
           }
           console.log("📥 [" + this.gid.slice(0, 10) + "] ورودی از:", senderNumber, "| نوع:", msgType);
@@ -2577,9 +2573,7 @@ class UserBot {
         if(matched && matched.msgKey && matched.msgKey.id && matched.msgKey.remoteJid){
           try{
             const rd = matched.data || {};
-            const oldDate = formatDate(matched.timestamp)
-              + (rd.date ? "\n🧾 مورخ فیش: " + rd.date : "")
-              + (rd.time ? " — " + rd.time : "");
+            const oldDate = formatDate(matched.timestamp);
 
             await this.sock.sendMessage(msg.key.remoteJid, {
               text: oldDate
@@ -3672,7 +3666,7 @@ function listSlots(gid){
 /* v10.2: پلن اشتراک — مشاهده و فعال‌سازی (فعلاً کلیکی؛ پرداخت واقعی بعداً) */
 app.get("/api/plan", (req, res) => {
   const gid = parseSlotKey(req.user.gid).gid;
-  const plans = Object.keys(PLANS).map(k => ({ type: k, name: PLANS[k].name, price: PLANS[k].price, features: PLANS[k].features, paid: k !== "free" }));
+  const plans = Object.keys(PLANS).map(k => ({ type: k, name: PLANS[k].name, price: PLANS[k].price, features: PLANS[k].features, paid: true }));
   const info = planInfo(gid);
   info.u.loadPlanReq();
   const list = info.u.planReq || [];
