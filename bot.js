@@ -458,6 +458,10 @@ function buildFingerprint(info, bankKey){
   const a = normalizeAmount(info.amount);
   const d = normalizeDate(info.date);
   const t = normalizeTime(info.time);
+  /* v12.2.5: اثر انگشت مبتنی بر ساعت فقط با ثانیه معتبر است —
+     بدون ثانیه، دو فیش مختلف در یک دقیقه (مبلغ و گیرنده یکسان)
+     اثر انگشت یکسان می‌گرفتند و به اشتباه «تکراری» اعلام می‌شدند */
+  const tSec = t && t.split(":").length === 3 ? t : "";
   if(!a || !d) return "";
   if(bankKey === "enpara"){
     const s = normalizeCodeId(info.trackingNo);
@@ -465,10 +469,12 @@ function buildFingerprint(info, bankKey){
   }
   if(bankKey === "akbank" || bankKey === "ziraat"){
     const r = normalizeIban(info.receiverIban);
-    if(t) return (bankKey === "akbank" ? "AK|" : "ZB|") + d + "|" + t + "|" + a + (r ? "|" + r : "");
+    if(tSec) return (bankKey === "akbank" ? "AK|" : "ZB|") + d + "|" + tSec + "|" + a + (r ? "|" + r : "");
+    return ""; /* ثانیه خوانده نشد → بدون اثر انگشت */
   }
   const r = normalizeIban(info.receiverIban);
-  return "GN|" + d + (t ? "|" + t : "") + "|" + a + (r ? "|" + r : "");
+  if(tSec) return "GN|" + d + "|" + tSec + "|" + a + (r ? "|" + r : "");
+  return ""; /* ثانیه خوانده نشد → بدون اثر انگشت */
 }
 
 /* ── گارد آگاه به خطای OCR ── */
@@ -875,6 +881,7 @@ async function extractWithVision(imageDataBase64, ocrText, bankKey){
 6. اگر فیش دو تا شماره دارد (مثلاً Tracking و Reference)، هر دو را ثبت کن
 7. تاریخ را دقیق بخوان: روز، ماه و سال جدا از هم (مثال 05/09/2026)
 8. ساعت را با بالاترین دقت بخوان: ساعت، دقیقه و ثانیه اگر روی فیش هست (مثال 14:32:07) — ثانیه اگر نوشته شده حتماً ثبت شود
+⚠️ ثانیه حیاتی است: بدون ثانیه سیستم نمی‌تواند این فیش را از فیش‌های دیگر تشخیص دهد. اگر ثانیه روی فیش هست و تو ننویسی، فیش سالم به اشتباه «تکراری» اعلام می‌شود. ثانیه را از قسمت ساعت تراکنش (İşlem Saati) مو به مو بخوان.
 9. شماره قواره فیش / شماره سند را جدا از شماره پیگیری ثبت کن
 10. هر رقم را مو به مو بدون حدس و بدون رند کردن بخوان — یک رقم اشتباه کل سیستم را خراب می‌کند
 11. مبلغ را به فرمت عددی ساده بدون جداکننده هزارگان بنویس (مثال: 5000 یا 4991.00)
